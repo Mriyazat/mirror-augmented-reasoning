@@ -127,6 +127,14 @@ CoT_DDI/
 │   ├── prm_rubric.yaml            step-level rubric for the DDI-PRM
 │   └── accelerate_fsdp*.yaml      FSDP / mixed-precision per training stage
 │
+├── scripts/                       Pipeline runners (one shell wrapper per phase)
+│   ├── download_models.py               HF snapshot of every teacher / PRM / student
+│   ├── run_phase_a.sh                   Phase A — corpus / taxonomy / splits / audits
+│   ├── run_phase_b.sh                   Phase B — PRM · teachers · QC · consensus · prefs
+│   ├── run_phase_c.sh                   Phase C — SFT + symmetry-KL · PRM-DPO · head
+│   ├── run_phase_d.sh                   Phase D — inference · abstention · eval · stress
+│   └── run_all.sh                       end-to-end A → D
+│
 ├── src/
 │   ├── data/                      Phase A — corpus construction
 │   │   ├── parse_drugbank.py            XML → parquet (drugs, pairs, pathways, x-refs, brands)
@@ -218,7 +226,20 @@ Optional auxiliary sources (paths in `configs/base.yaml`):
 
 ## Run the pipeline
 
-Every step is a self-contained `python -m` entry point that reads/writes parquet & JSONL artefacts. Run them in order.
+Every step is a self-contained `python -m` entry point that reads/writes parquet & JSONL artefacts. Run them in order — either via the per-phase shell wrappers under `scripts/`:
+
+```bash
+# end-to-end
+bash scripts/run_all.sh
+
+# or one phase at a time
+bash scripts/run_phase_a.sh
+bash scripts/run_phase_b.sh
+bash scripts/run_phase_c.sh
+CHECKPOINT=outputs/student/dpo/<run>  bash scripts/run_phase_d.sh
+```
+
+…or by invoking the underlying entry points directly:
 
 ### A · Corpus, taxonomy, splits
 
