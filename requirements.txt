@@ -1,0 +1,72 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# DDI V4 — Pinned dependencies (2026-04)
+# Two installation profiles:
+#   1) Laptop (data prep, audits, small CPU experiments)      → pip install -r requirements.txt
+#   2) Cluster (training + inference with CUDA + vLLM)        → add requirements-cluster.txt (D-phase)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# === Core numerical stack ===
+# Pins chosen for Python 3.13 binary-wheel availability on macOS arm64 + Linux x86_64.
+numpy>=1.26
+scipy>=1.13
+pandas>=2.2
+pyarrow>=17.0
+scikit-learn>=1.5
+xgboost>=2.0
+
+# === XML + parsing ===
+lxml>=5.3
+beautifulsoup4>=4.12
+
+# === NLP / reasoning parse for A5 taxonomy ===
+spacy==3.7.5
+# spaCy model pulled lazily:  python -m spacy download en_core_web_sm
+
+# === LLM / training stack (CPU-usable install; GPU wheels swapped on cluster) ===
+torch==2.3.1
+transformers==4.42.3
+accelerate==0.32.1
+peft==0.11.1
+trl==0.9.4
+datasets==2.20.0
+sentencepiece==0.2.0
+tokenizers==0.19.1
+
+# === Graph / pathway retrieval (P2) ===
+networkx==3.3
+
+# === Config / IO / logging ===
+pyyaml==6.0.1
+tqdm==4.66.4
+jsonlines==4.0.0
+click==8.1.7
+rich==13.7.1
+
+# === Experiment tracking (optional, hook into wandb when on cluster) ===
+# wandb==0.17.3
+
+# === Test + lint ===
+pytest==8.2.2
+pytest-cov==5.0.0
+ruff==0.5.0
+
+# === Stats / calibration for abstention (P7) ===
+statsmodels==0.14.2
+
+# === Cheminformatics (A7 MOR retrieval audit) ===
+# rdkit is a heavy binary dep used only by src/metrics/mor.py. `src.metrics`
+# imports it optionally, so eval still runs if it is missing — but install it
+# if you want to rerun the MOR retrieval-gate audit.
+#
+# INSTALL NOTES:
+#   * Laptop / local dev: pip install 'rdkit>=2024.3'  (PyPI wheels from 2024.03+)
+#   * Compute Canada / Rorqual: DO NOT pip install. Alliance ships a dummy wheel
+#     that intentionally fails pip installs. Use the system module instead,
+#     loaded BEFORE the venv is activated. scripts/slurm/activate_env.sh already
+#     does this: `module load ... rdkit/2024.09.6`. See
+#     https://docs.alliancecan.ca/wiki/RDKit
+rdkit>=2024.3; sys_platform != "linux" or platform_machine != "x86_64"
+
+# NOTE: torch-geometric + torch-scatter + torch-sparse (needed by OpenDDI GNN
+# baselines in D5) are installed separately against the CUDA version of torch.
+# See DDI/external/OpenDDI/README.md for their exact pins.

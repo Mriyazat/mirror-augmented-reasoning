@@ -1,0 +1,175 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# DDI V4 — Base configuration (all phases inherit, override per-phase)
+# ─────────────────────────────────────────────────────────────────────────────
+
+project:
+  name: ddi_v4
+  target_venue: EMNLP 2026 (ARR)
+  root: .  # repo root; override via env or per-phase config on cluster
+  seed: 42
+
+# === Data paths (all under project.root) ===
+paths:
+  data_raw: data_raw
+  data_processed: data_processed
+  outputs: outputs
+  audit: outputs/audit
+  results: outputs/results
+  logs: outputs/logs
+  figures: outputs/figures
+  external: external
+
+data_sources:
+  drugbank:
+    xml: data_raw/drugbank_2026-04.xml
+    sha256: de965e5a3047e70f6735619bdb615e0ace1928170bce4c9df2ec58d429a1474a
+    expected_drugs: 19853
+    expected_interactions: 2913002
+    expected_pairs: 1456772
+  ddinter:
+    dir: data_raw/ddinter_2
+    unified_csv: outputs/audit/a07_ddinter_unified.csv
+    use_as: metadata_only  # NEVER a prediction target
+    expected_pairs: 160235
+    severity_coverage_drugbank_pct: 6.26
+  kegg_smpdb:
+    dir: data_raw/pathways  # created in A4
+    enabled: true
+
+# === Label taxonomy (Phase A5) ===
+taxonomy:
+  max_families: 20
+  max_subtypes: 100
+  collapse_forbidden: true  # NO "other" bucket — force every label into a family
+  directionality: true
+
+# === Splits (Phase A8; matches A0.8 protocol) ===
+splits:
+  random_full: {train: 0.80, val: 0.10, test: 0.10}
+  drug_cold:   {train: 0.80, val: 0.10, test: 0.10}   # on 19,853 drugs
+  pair_cold:   {train: 0.80, val: 0.10, test: 0.10}   # on pairs, drug overlap free
+  subset25k:
+    train: 20000
+    val: 2500
+    test: 2500
+    per_class_cap: 500
+    severity_labeled_min_pct: 30.0
+    max_drug_freq_pct: 3.0
+
+# === Models ===
+models:
+  student:
+    hf_id: Qwen/Qwen2.5-7B
+    lora_r: 64
+    lora_alpha: 128
+    lora_dropout: 0.05
+    target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+  teacher:
+    hf_id: meta-llama/Llama-3.3-70B-Instruct
+    candidates_per_pair: 5
+    decoding: {temperature: 0.7, top_p: 0.9, max_tokens: 1024}
+  prm_base:
+    hf_id: eth-medical-ai-lab/Med-PRM-7B  # from external/Med-PRM
+    lora_r: 32
+    lora_alpha: 64
+  judges:
+    openbio_70b:  aaditya/Llama3-OpenBioLLM-70B
+    txgemma_27b:  google/txgemma-27b-chat
+    qwen_72b:     Qwen/Qwen2.5-72B-Instruct
+    meditron_70b: epfl-llm/meditron-70b
+  frontier_judges:  # only for D9
+    gpt5:            gpt-5
+    gemini_2_5_pro:  gemini-2.5-pro
+    claude_opus_4:   claude-opus-4
+
+# === Retrieval (Phase A6, P2) ===
+retrieval:
+  method: pathway_signature_jaccard
+  granularities: [pathway_id, pathway_family, shared_target]
+  top_k: 8
+  mor_floor: 0.55   # MOR validation gate in A7
+
+# === Training (Phase C) ===
+training:
+  sft:
+    epochs: 3
+    lr: 2.0e-4
+    batch_per_gpu: 8
+    grad_accum: 4
+    cosine_warmup: 0.03
+    faithfulness_loss_weight: 0.5
+    symmetry_loss_weight: 0.3
+  dpo:
+    beta: 0.1
+    prm_weight_exponent: 1.0
+    mirror_pair_ratio: 0.5
+  classifier_head:
+    dropout: 0.1
+    temperature_init: 1.0
+
+# === Abstention (Phase C6, P7) ===
+abstention:
+  method: conformal_plus_entropy
+  target_coverage: 0.90
+  calibration_size: 2500
+
+# === Metrics thresholds (Phase C8 GO/NO-GO + §11 success criteria) ===
+metrics:
+  go_no_go:
+    macro_f1_vs_xgb_min: 3.0
+    mfs_min: 0.60
+    mps_min: 0.85
+    au_min: 0.0
+  success:
+    macro_f1_random_full_vs_xgb: 3.0
+    macro_f1_drug_cold_vs_xgb:   0.0
+    macro_f1_pair_cold_vs_xgb:   2.0
+    mfs: 0.70
+    mps: 0.85
+    cfs: 0.20
+    ths: 0.65
+    au_at_90_coverage: 0.0
+    rpc: 0.90
+    slfs: 0.70
+    csa: 0.80
+    hr_max: 0.10
+    human_pharmacist_acceptable_pct: 70.0
+
+# === Evaluation (Phase D) ===
+evaluation:
+  baselines:
+    xgboost_featureset: [fingerprint, pharmacology]
+    openddi_models:
+      - CASTER
+      - ConvLSTM
+      - DDIMDL
+      - DDKG
+      - DSNDDI
+      - DeepDDI
+      - ExDDI
+      - GOGNN
+      - KGNN
+      - LaGAT
+      - MIRACLE
+      - MKGFENN
+      - MMDGDTI
+      - MRCGNN
+      - MUFFIN
+      - MVA
+      - PHGLDDI
+      - SumGNN
+      - TIGER
+      - ZeroDDI
+  polypharmacy:
+    drugs_per_combo: 3
+    n_combos: 2000
+  counterfactual:
+    n_perturbations_per_pair: 5
+    pk_flags_to_flip: [cyp3a4_inhibitor, cyp2d6_inhibitor, pgp_inhibitor, oatp_substrate]
+  human_eval:
+    n_samples: 100
+    n_experts: 3
+
+logging:
+  level: INFO
+  format: "%(asctime)s | %(name)s | %(levelname)s | %(message)s"

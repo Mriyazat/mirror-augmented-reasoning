@@ -1,0 +1,30 @@
+# Accelerate config for 4×H100 FSDP training of DDI-PRM (8B backbone).
+#
+# Activate:  source scripts/slurm/activate_env.sh
+# Launch:    accelerate launch --config_file configs/accelerate_fsdp.yaml ...
+
+compute_environment: LOCAL_MACHINE
+distributed_type: FSDP
+num_machines: 1
+num_processes: 4
+mixed_precision: bf16
+gpu_ids: all
+machine_rank: 0
+main_training_function: main
+rdzv_backend: static
+tpu_use_cluster: false
+tpu_use_sudo: false
+use_cpu: false
+
+fsdp_config:
+  fsdp_auto_wrap_policy: TRANSFORMER_BASED_WRAP
+  fsdp_transformer_layer_cls_to_wrap: LlamaDecoderLayer
+  fsdp_backward_prefetch: BACKWARD_PRE
+  fsdp_state_dict_type: FULL_STATE_DICT
+  fsdp_offload_params: false
+  fsdp_sharding_strategy: FULL_SHARD
+  fsdp_cpu_ram_efficient_loading: true
+  fsdp_sync_module_states: true
+  fsdp_use_orig_params: true
+  fsdp_forward_prefetch: true
+  fsdp_activation_checkpointing: true
