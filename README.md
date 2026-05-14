@@ -22,51 +22,99 @@
 
 <br>
 
-> **TL;DR** &nbsp; Three frontier teachers generate 72 candidate traces per drug pair. A fine-tuned **DDI-PRM critic** + 10 rule gates merge them into one consensus trace. A 7B Qwen student is then trained with a **position-restricted symmetry-KL** loss (mirror-AB↔BA agreement) and **PRM-weighted DPO** with four families of programmatic hard-negatives. Result: macro-F1 **0.797**, MFS **0.954**, MPS **0.892**, HR **0.0005** on the in-distribution validation set — with the **first explicit retrieval-ablation** in the DDI literature (removing the neighbour block collapses macro-F1 from 0.797 → 0.178 on the same checkpoint).
+> **TL;DR** &nbsp; Three frontier teachers each generate many candidate traces per drug pair under a temperature schedule. A fine-tuned **DDI-PRM critic** plus a stack of deterministic rule gates collapse those candidates into a single consensus trace. A 7B Qwen student is then trained in three stages — **SFT with a position-restricted symmetry-KL loss** (mirror AB↔BA agreement), **PRM-weighted DPO**, and a hard-negative polish — and evaluated under an 8-metric suite on three split protocols of increasing generalisation difficulty.
 
 <br>
 
 ## Pipeline
 
+<table align="center">
+<tr>
+  <td align="center" width="22%">
+    <sub><b>PHASE A</b></sub><br>
+    <b>Corpus &amp; Retrieval</b><br><br>
+    <sub>DrugBank parse · hierarchical taxonomy · leakage-safe splits · 4-component mechanism-aware retrieval index</sub>
+  </td>
+  <td align="center" width="3%"><sub>→</sub></td>
+  <td align="center" width="22%">
+    <sub><b>PHASE B</b></sub><br>
+    <b>Multi-Teacher Consensus</b><br><br>
+    <sub>3 frontier teachers × many candidates · rule QC gates · DDI-PRM critic · cross-LLM merge</sub>
+  </td>
+  <td align="center" width="3%"><sub>→</sub></td>
+  <td align="center" width="22%">
+    <sub><b>PHASE C</b></sub><br>
+    <b>Student Training</b><br><br>
+    <sub>Qwen-2.5-7B + LoRA · tier-weighted SFT + symmetry-KL · PRM-weighted DPO · hard-negative polish</sub>
+  </td>
+  <td align="center" width="3%"><sub>→</sub></td>
+  <td align="center" width="22%">
+    <sub><b>PHASE D</b></sub><br>
+    <b>Evaluation</b><br><br>
+    <sub>JSON-constrained inference · conformal abstention · 8-metric suite on 3 splits</sub>
+  </td>
+</tr>
+</table>
+
 ```mermaid
 flowchart LR
-    subgraph A["<b>A · Corpus &amp; Retrieval</b>"]
-        direction TB
-        A1["DrugBank 2026-04<br/>19,853 drugs · 1.45M pairs"] --> A2["Taxonomy<br/>7 families × 147 subtypes"]
-        A2 --> A3["Splits<br/>random_full · drug_cold · pair_cold"]
-        A3 --> A4["Retrieval index<br/>J_p + J_r + ATC/7 + Tanimoto"]
-    end
-    subgraph B["<b>B · Multi-Teacher Distillation</b>"]
-        direction TB
-        B1["Qwen2.5-72B<br/>DeepSeek-R1-70B<br/>Llama-3.3-70B"] --> B2["72 candidates / pair<br/>T ∈ [0.30, 1.00]"]
-        B2 --> B3["Judge stack<br/>10 rule gates · DDI-PRM<br/>self-consistency · OOF probe"]
-        B3 --> B4["Consensus<br/>23,819 reasoning-safe traces"]
-    end
-    subgraph C["<b>C · Student Training</b>"]
-        direction TB
-        C1["SFT<br/>Qwen2.5-7B + LoRA<br/>symmetry-KL · 1/√n_f"] --> C2["PRM-weighted DPO<br/>w_i = Φ_PRM(y⁺) − Φ_PRM(y⁻)"]
-        C2 --> C3["Hard-negatives<br/>family-swap · axis · subtype · dir-flip"]
-    end
-    subgraph D["<b>D · Evaluation</b>"]
-        direction TB
-        D1["8-metric suite<br/>macro-F1 · MFS · MPS · CSA<br/>RPC · AU · HR · THS"] --> D2["3 split protocols<br/>random_full · drug_cold · pair_cold"]
-    end
-    A --> B --> C --> D
+    classDef phase fill:#0f172a,stroke:#475569,stroke-width:1px,color:#e2e8f0,rx:8,ry:8
+    classDef ground fill:#1e293b,stroke:#334155,stroke-width:1px,color:#cbd5e1,rx:6,ry:6
+
+    A1["DrugBank XML"]:::ground
+    A2["Taxonomy<br/>(families · subtypes · direction)"]:::ground
+    A3["Splits<br/>random_full · drug_cold · pair_cold"]:::ground
+    A4["Retrieval index<br/>pathway · protein · ATC · SMILES"]:::ground
+
+    B1["Teacher generation<br/>vLLM · temperature schedule"]:::ground
+    B2["Rule QC gates<br/>G1 … G10"]:::ground
+    B3["DDI-PRM step critic"]:::ground
+    B4["Cross-LLM consensus<br/>+ reasoning-safety filter"]:::ground
+
+    C1["SFT<br/>tier-weighted CE<br/>+ faithfulness<br/>+ symmetry-KL"]:::ground
+    C2["PRM-weighted DPO<br/>exact hook · IS fallback"]:::ground
+    C3["Hard-negative polish<br/>family · axis · subtype · direction"]:::ground
+
+    D1["JSON-constrained<br/>inference"]:::ground
+    D2["Conformal +<br/>entropy abstention"]:::ground
+    D3["8-metric suite<br/>× 3 split protocols"]:::ground
+
+    A1 --> A2 --> A3 --> A4 --> B1
+    B1 --> B2 --> B3 --> B4 --> C1
+    C1 --> C2 --> C3 --> D1
+    D1 --> D2 --> D3
 ```
 
 <br>
 
 ## Why this exists
 
-Most DDI benchmarks score **one number** — the top-1 label of a feature or graph classifier. In the clinic that is not enough. A pharmacist needs the **mechanism** (which CYP, transporter, or PD axis), the **direction** (A→B, B→A, bidirectional, or none), the **evidence**, and a calibrated **abstention** when the evidence is thin.
+Most DDI benchmarks score **one number** — the top-1 label of a feature or graph classifier. In the clinic that is not enough. A pharmacist needs the **mechanism** (which CYP, transporter, or pharmacodynamic axis), the **direction** (A→B, B→A, bidirectional, or none), the **evidence**, and a calibrated **abstention** when the evidence is thin.
 
 Three failure modes block naive teacher-to-student distillation:
 
-| Failure | What it looks like | How we fix it |
-|---|---|---|
-| **Mirror inconsistency** | The same pair flipped AB↔BA gets different family/direction in 51.4 % of V3 cases | Co-batched AB & BA + position-restricted symmetry-KL on the direction tag |
-| **Class imbalance** | 47× ratio between families collapses the student onto `AdverseRisk` | Class-balanced 1/√n<sub>f</sub> sampling + family-axis hard-negatives |
-| **Reasoning decay** | Student parrots teacher phrasing and cites phantom evidence | DDI-PRM step critic + 10 rule QC gates + reasoning-safety filter |
+<table>
+<thead>
+<tr><th align="left" width="22%">Failure</th><th align="left" width="42%">What it looks like</th><th align="left" width="36%">How we address it</th></tr>
+</thead>
+<tbody>
+<tr>
+  <td><b>Mirror inconsistency</b></td>
+  <td>The same pair flipped AB↔BA gets different family / direction predictions.</td>
+  <td>Co-batched AB &amp; BA records + position-restricted symmetry-KL on the direction tag.</td>
+</tr>
+<tr>
+  <td><b>Class imbalance</b></td>
+  <td>One family dominates; rare families are abstained away under naive cross-entropy.</td>
+  <td>Class-balanced <code>1/√n<sub>f</sub></code> sampling + family-axis hard-negatives.</td>
+</tr>
+<tr>
+  <td><b>Reasoning decay</b></td>
+  <td>Student parrots teacher phrasing and cites phantom evidence.</td>
+  <td>DDI-PRM step critic + 10 rule QC gates + reasoning-safety filter.</td>
+</tr>
+</tbody>
+</table>
 
 <br>
 
@@ -84,23 +132,23 @@ CoT_DDI/
 │   │   ├── parse_drugbank.py            XML → parquet (drugs, pairs, pathways, x-refs, brands)
 │   │   ├── fetch_pathways.py            KEGG + SMPDB pathway harvest
 │   │   ├── build_pk_table.py            CYP / P-gp / OATP / BCRP flags per drug
-│   │   ├── build_signatures.py          pair-level pathway- & protein-Jaccard signatures
-│   │   ├── build_taxonomy.py            7-family × 147-subtype taxonomy
-│   │   ├── build_splits.py              random_full / drug_cold / pair_cold + subset25k
+│   │   ├── build_signatures.py          pair-level pathway- &amp; protein-Jaccard signatures
+│   │   ├── build_taxonomy.py            hierarchical mechanism taxonomy
+│   │   ├── build_splits.py              random_full / drug_cold / pair_cold + subset
 │   │   ├── build_mirror_sft_corpus.py   AB + BA mirror records for SFT
 │   │   ├── build_adversarial.py         direction-flip / negation stress set
 │   │   ├── build_counterfactual.py      single-PK-flag perturbations
 │   │   ├── build_polypharmacy.py        3-drug combinations
-│   │   ├── build_student_eval_prompts.py prompts w/ top-K retrieval block
+│   │   ├── build_student_eval_prompts.py prompts with top-K retrieval block
 │   │   └── prepare_phase_c.py           tier-weighted SFT + preference corpus
 │   │
 │   ├── audit/                     Phase A audits + GO/NO-GO freeze
 │   ├── teacher/                   Phase B — generation, QC, PRM, consensus
 │   │   ├── prompt.py · schema.py · context_builder.py · provider.py
-│   │   ├── generate.py                  vLLM-backed N=24 candidates / pair / teacher
-│   │   ├── qc.py                        10 rule gates G1 – G10
+│   │   ├── generate.py                  vLLM-backed candidate generation per teacher
+│   │   ├── qc.py                        10 rule gates G1 … G10
 │   │   ├── critic.py · prm_data.py · prm_train.py · prm_verify.py
-│   │   ├── critic_rerank.py             best-of-24 PRM rerank
+│   │   ├── critic_rerank.py             PRM rerank within teacher
 │   │   ├── merge.py · merge_consensus.py cross-LLM consensus merge
 │   │   ├── apply_reasoning_safety.py    citation / direction-verb filter
 │   │   ├── llm_judge.py                 GPT / Claude / Gemini OOF probe
@@ -115,13 +163,13 @@ CoT_DDI/
 │   │   └── evaluate_sweep.py · summarize_sweep.py
 │   │
 │   ├── inference/                 Phase D — prediction
-│   │   ├── predict.py                   JSON-constrained inference w/ retrieval block
-│   │   ├── abstention.py                conformal + entropy gating @ 90% coverage
+│   │   ├── predict.py                   JSON-constrained inference with retrieval block
+│   │   ├── abstention.py                conformal + entropy gating
 │   │   └── augment_predictions.py
 │   │
 │   ├── evaluation/                Phase D — eval harness + baselines
 │   │   ├── run_full_eval.py             full 8-metric suite on all 3 splits
-│   │   └── baseline_xgboost.py          299-tree XGBoost over the same 4-component features
+│   │   └── baseline_xgboost.py          gradient-boosted reference over the same features
 │   │
 │   └── metrics/                   one module per metric, unit-tested
 │       mfs.py  mps.py  csa.py  rpc.py  au.py  hr.py  ths.py
@@ -135,7 +183,7 @@ CoT_DDI/
 
 ## Installation
 
-> **Python ≥ 3.11.** Verified on macOS arm64 (3.13) and Linux x86_64 (3.11, CUDA 12.2, 4× H100 80GB).
+> **Python ≥ 3.11.** Verified on macOS arm64 and Linux x86_64 with CUDA 12.2.
 
 ```bash
 git clone https://github.com/Mriyazat/CoT_DDI.git
@@ -162,8 +210,9 @@ data_raw/drugbank_2026-04.xml
 ```
 
 Optional auxiliary sources (paths in `configs/base.yaml`):
-- **DDInter 2** (severity metadata, *never* used as a label) → `data_raw/ddinter_2/`
-- **KEGG / SMPDB** pathway dumps → `data_raw/pathways/`
+
+- **DDInter 2** &nbsp;— severity metadata, *never* used as a label &nbsp;→ &nbsp;`data_raw/ddinter_2/`
+- **KEGG / SMPDB** &nbsp;— pathway dumps &nbsp;→ &nbsp;`data_raw/pathways/`
 
 <br>
 
@@ -182,10 +231,10 @@ python -m src.data.fetch_pathways
 python -m src.data.build_pk_table
 python -m src.data.build_signatures
 
-# A3 — 7-family × 147-subtype hierarchical taxonomy
+# A3 — hierarchical mechanism taxonomy
 python -m src.data.build_taxonomy
 
-# A4 — three split protocols + 25k-pair balanced subset
+# A4 — three split protocols + balanced teacher subset
 python -m src.data.build_splits
 
 # A5 — audits + GO/NO-GO freeze
@@ -203,16 +252,16 @@ python -m src.teacher.prm_data
 python -m src.teacher.prm_train
 python -m src.teacher.prm_verify
 
-# B1 — N=24 candidates / pair / teacher, T ∈ [0.30, 1.00]
+# B1 — candidate generation per teacher under a temperature schedule
 #       (vLLM server expected at $OPENAI_API_BASE)
-python -m src.teacher.generate --split subset25k --teacher llama-3.3-70b   --candidates 24
-python -m src.teacher.generate --split subset25k --teacher qwen-2.5-72b    --candidates 24
-python -m src.teacher.generate --split subset25k --teacher deepseek-r1-70b --candidates 24
+python -m src.teacher.generate --split subset --teacher llama-3.3-70b
+python -m src.teacher.generate --split subset --teacher qwen-2.5-72b
+python -m src.teacher.generate --split subset --teacher deepseek-r1-70b
 
-# B2 — 10 deterministic rule gates G1 – G10
+# B2 — 10 deterministic rule gates G1 … G10
 python -m src.teacher.qc
 
-# B3 — PRM step-level critic + best-of-24 rerank
+# B3 — PRM step-level critic + best-of rerank within each teacher
 python -m src.teacher.critic
 python -m src.teacher.critic_rerank
 
@@ -221,7 +270,7 @@ python -m src.teacher.merge_consensus
 python -m src.teacher.apply_reasoning_safety
 python -m src.teacher.audit_teacher_clean
 
-# B5 — preference corpora for DPO
+# B5 — preference corpora for Phase C
 python -m src.teacher.build_preference_pairs
 python -m src.teacher.build_direction_mirror_preferences
 python -m src.teacher.build_phase4_hard_negative_preferences
@@ -239,7 +288,7 @@ python -m src.teacher.llm_judge
 
 </details>
 
-### C · Student training (Qwen-2.5-7B + LoRA r=64)
+### C · Student training (Qwen-2.5-7B + LoRA)
 
 ```bash
 # C0 — tier-weighted SFT + mirror preference corpora
@@ -268,7 +317,7 @@ python -m src.data.build_student_eval_prompts
 python -m src.inference.predict     --split pair_cold --checkpoint <path-to-LoRA>
 python -m src.inference.abstention
 
-# D3 — XGBoost reference (299 trees over the same 4-component features)
+# D3 — gradient-boosted reference over the same 4-component features
 python -m src.evaluation.baseline_xgboost
 
 # D4 — full 8-metric suite on random_full / drug_cold / pair_cold
@@ -284,51 +333,61 @@ python -m src.data.build_polypharmacy
 
 ## Method at a glance
 
-### 1 · Position-restricted symmetry-KL (the mirror constraint)
+### 1 · Position-restricted symmetry-KL — the mirror constraint
 
 For every co-batched (AB, BA) pair the loss is
 
 $$
-\mathcal{L}\bigl(p_\text{AB}, p_\text{BA}\bigr) \;=\; \mathcal{L}_\text{SFT}(p_\text{AB}) + \mathcal{L}_\text{SFT}(p_\text{BA}) \;+\; \lambda \cdot \text{KL}\!\left( \text{softmax}(z^{\text{AB}}_\text{tag}) \;\Big\|\; T_{\pi}\bigl[\text{softmax}(z^{\text{BA}}_\text{tag})\bigr] \right)
+\mathcal{L}\bigl(p_{\text{AB}}, p_{\text{BA}}\bigr) \;=\; \mathcal{L}_{\text{SFT}}(p_{\text{AB}}) + \mathcal{L}_{\text{SFT}}(p_{\text{BA}}) \;+\; \lambda \cdot \mathrm{KL}\!\left( \mathrm{softmax}(z^{\text{AB}}_{\text{tag}}) \;\big\|\; T_{\pi}\bigl[\mathrm{softmax}(z^{\text{BA}}_{\text{tag}})\bigr] \right)
 $$
 
-where $T_\pi$ permutes the four direction tokens (AB↔BA, BIDIR↔BIDIR, N/A↔N/A) and $\lambda=0.1$. The KL fires **only** on the direction-tag token — leaving the free-form reasoning uncoupled — which is the key reason it works.
+where $T_{\pi}$ permutes the four direction tokens (AB↔BA, BIDIR↔BIDIR, N/A↔N/A). The KL fires **only** on the direction-tag token, leaving the free-form reasoning uncoupled — which is the key reason it works.
 
 ### 2 · PRM-weighted DPO
 
 Per-pair weight from the DDI-PRM margin between chosen and rejected:
 
 $$
-w_i \;=\; \text{clip}\!\bigl(\Phi_\text{PRM}(y^+_i) - \Phi_\text{PRM}(y^-_i),\; 0,\; 1\bigr), \qquad \mathcal{L}_\text{PRM-DPO} \;=\; -\sum_i w_i \log \sigma\bigl(\beta\,\Delta_i\bigr).
+w_i \;=\; \mathrm{clip}\!\bigl(\Phi_{\text{PRM}}(y^+_i) - \Phi_{\text{PRM}}(y^-_i),\; 0,\; 1\bigr), \qquad \mathcal{L}_{\text{PRM-DPO}} \;=\; -\sum_i w_i \log \sigma\bigl(\beta\,\Delta_i\bigr)
 $$
 
-Two interchangeable backends, selected at runtime via capability detection:
+Two interchangeable backends, dispatched by runtime capability detection:
 
-| Backend | When | How |
-|---|---|---|
-| **Exact** | TRL exposes a per-example `dpo_loss` hook | Monkey-patch the hook, multiply per-example losses by $w_i$ before reduction |
-| **IS fallback** | older TRL | Deterministic importance sampling: minibatches drawn ∝ $w_i$, standard DPO loss |
+<table>
+<thead>
+<tr><th align="left">Backend</th><th align="left">When it is used</th><th align="left">How it implements Eq. (above)</th></tr>
+</thead>
+<tbody>
+<tr><td><b>Exact</b></td><td>TRL exposes a per-example <code>dpo_loss</code> hook</td><td>Monkey-patch the hook; multiply per-example losses by <code>w<sub>i</sub></code> before reduction.</td></tr>
+<tr><td><b>IS fallback</b></td><td>older TRL without the hook</td><td>Deterministic importance sampling: minibatches drawn ∝ <code>w<sub>i</sub></code>, standard DPO loss applied.</td></tr>
+</tbody>
+</table>
 
 ### 3 · Four hard-negative families
 
-All edits are confined to the `final_answer` block so the trace prefix is identical to the chosen — preventing surface-artefact shortcuts.
+All edits are confined to the `final_answer` block so the trace prefix is identical to the chosen — preventing the student from exploiting surface artefacts.
 
-| Family | Construction | Targets |
-|---|---|---|
-| `FAMILY-SWAP-TO-ADVERSERISK` | rewrite family → `ADVERSERISK` | over-prediction attractor |
-| `FAMILY-AXIS SWAP` | swap across a confusion axis map | non-`ADVERSERISK` confusions |
-| `SUBTYPE SWAP` | sample different subtype within same family | sub-family confusion |
-| `DIRECTION FLIP` | apply $T_\pi$ to flip the direction tag | direction errors |
+<table>
+<thead>
+<tr><th align="left" width="34%">Family</th><th align="left" width="36%">Construction</th><th align="left" width="30%">Targets</th></tr>
+</thead>
+<tbody>
+<tr><td><code>FAMILY-SWAP-TO-ADVERSERISK</code></td><td>rewrite final family to the dominant family</td><td>over-prediction attractor</td></tr>
+<tr><td><code>FAMILY-AXIS SWAP</code></td><td>swap family across a curated confusion-axis map</td><td>cross-family confusions</td></tr>
+<tr><td><code>SUBTYPE SWAP</code></td><td>keep family, sample a different in-family subtype</td><td>sub-family confusion</td></tr>
+<tr><td><code>DIRECTION FLIP</code></td><td>apply <code>T<sub>π</sub></code> to flip the direction tag</td><td>direction errors</td></tr>
+</tbody>
+</table>
 
 ### 4 · Mechanism-aware retrieval
 
-Drug–drug similarity is a 4-component score (all weights $=1.0$ in main paper):
+Drug–drug similarity is a 4-component score:
 
 $$
-s(d_i, d_j) = w_p J_p + w_r J_r + w_a \tfrac{A}{7} + w_t T
+s(d_i, d_j) \;=\; w_p\, J_p \;+\; w_r\, J_r \;+\; w_a\, \tfrac{A}{7} \;+\; w_t\, T
 $$
 
-with $J_p$ = pathway Jaccard, $J_r$ = protein-target Jaccard, $A$ = deepest common ATC depth (0–7), $T$ = SMILES Tanimoto over Morgan-2 1024-bit. Pair-pair score takes the max of the two alignment options; top-$K=5$ neighbours are restricted to `random_full.train` so test-side drugs never leak.
+with $J_p$ = pathway Jaccard (SMPDB ∪ KEGG), $J_r$ = protein-target Jaccard, $A$ = deepest common ATC prefix depth, and $T$ = SMILES Tanimoto over Morgan-2 fingerprints. Pair–pair score takes the max of the two alignment options; the top-$K$ neighbour universe is restricted to the training split so test-side drugs never leak.
 
 <br>
 
@@ -341,12 +400,28 @@ project:
   seed: 42
 
 models:
-  student: { hf_id: Qwen/Qwen2.5-7B, lora_r: 64, lora_alpha: 128 }
-  teacher: { candidates_per_pair: 24, decoding: { temperature: 0.7, top_p: 0.9, max_tokens: 1024 } }
+  student:
+    hf_id: Qwen/Qwen2.5-7B
+    lora_r: 64
+    lora_alpha: 128
+
+  teacher:
+    candidates_per_pair: 24
+    decoding:
+      temperature: 0.7
+      top_p: 0.9
+      max_tokens: 1024
 
 training:
-  sft: { epochs: 3, lr: 2.0e-4, faithfulness_loss_weight: 0.5, symmetry_loss_weight: 0.3 }
-  dpo: { beta: 0.1, prm_weight_exponent: 1.0, mirror_pair_ratio: 0.5 }
+  sft:
+    epochs: 3
+    lr: 2.0e-4
+    faithfulness_loss_weight: 0.5
+    symmetry_loss_weight: 0.3
+  dpo:
+    beta: 0.1
+    prm_weight_exponent: 1.0
+    mirror_pair_ratio: 0.5
 
 abstention:
   method: conformal_plus_entropy
@@ -354,7 +429,7 @@ abstention:
 
 retrieval:
   top_k: 8
-  mor_floor: 0.55          # MOR validation gate
+  mor_floor: 0.55       # MOR validation gate
 ```
 
 Per-phase FSDP / mixed-precision settings live in the `configs/accelerate_fsdp*.yaml` files.
@@ -363,38 +438,25 @@ Per-phase FSDP / mixed-precision settings live in the `configs/accelerate_fsdp*.
 
 ## Metrics
 
-The eval harness emits **eight metrics**, each in its own unit-tested module under `src/metrics/`:
+The eval harness emits **eight metrics**, each in its own unit-tested module under `src/metrics/`.
 
-|     | Metric | What it measures |
-|---|---|---|
-| 1 | macro-F1                | family classification (the standard DDI metric) |
-| 2 | **MFS** &nbsp;`mfs.py`  | Mirror Family Stability — AB/BA agree on family |
-| 3 | **MPS** &nbsp;`mps.py`  | Mirror Prediction Symmetry — full (family, subtype, direction) triple agrees after $T_\pi$ |
-| 4 | **CSA** &nbsp;`csa.py`  | Context-Support Alignment — prediction is supported by a verbatim cited identifier from $E_p$ |
-| 5 | **RPC** &nbsp;`rpc.py`  | Reasoning-Path Coherence — mean step-level PRM score |
-| 6 | **AU** &nbsp;`au.py`    | Abstention Utility — AUC of coverage-vs-accuracy under conformal abstention |
-| 7 | **HR** &nbsp;`hr.py`    | Hallucination Rate — predictions citing identifiers not in $E_p$ |
-| 8 | **THS** &nbsp;`ths.py`  | Tiered-Hierarchy Score — credit only when family, subtype *and* direction are correct |
+<table>
+<thead>
+<tr><th align="left" width="10%">#</th><th align="left" width="22%">Metric</th><th align="left">Measures</th></tr>
+</thead>
+<tbody>
+<tr><td align="center">1</td><td>macro-F1</td><td>Family classification — the standard DDI metric.</td></tr>
+<tr><td align="center">2</td><td><b>MFS</b> &nbsp; <code>mfs.py</code></td><td>Mirror Family Stability — fraction of pairs whose AB and BA predictions agree on family.</td></tr>
+<tr><td align="center">3</td><td><b>MPS</b> &nbsp; <code>mps.py</code></td><td>Mirror Prediction Symmetry — full (family, subtype, direction) triple agrees after applying T<sub>π</sub>.</td></tr>
+<tr><td align="center">4</td><td><b>CSA</b> &nbsp; <code>csa.py</code></td><td>Context-Support Alignment — prediction is supported by a verbatim cited identifier from the evidence pool.</td></tr>
+<tr><td align="center">5</td><td><b>RPC</b> &nbsp; <code>rpc.py</code></td><td>Reasoning-Path Coherence — mean step-level PRM score.</td></tr>
+<tr><td align="center">6</td><td><b>AU</b> &nbsp; <code>au.py</code></td><td>Abstention Utility — area under coverage-vs-accuracy curve under conformal abstention.</td></tr>
+<tr><td align="center">7</td><td><b>HR</b> &nbsp; <code>hr.py</code></td><td>Hallucination Rate — predictions citing identifiers not in the evidence pool.</td></tr>
+<tr><td align="center">8</td><td><b>THS</b> &nbsp; <code>ths.py</code></td><td>Tiered-Hierarchy Score — credit only when family, subtype <em>and</em> direction are all correct.</td></tr>
+</tbody>
+</table>
 
-Auxiliary: `cfs` (consensus-family score), `slfs` (step-level faithfulness), `mor` (mechanism-of-action retrieval gate), `ris` (retrieval-influence score).
-
-<br>
-
-## Headline numbers (in-distribution validation)
-
-<div align="center">
-
-| Metric | Value | | Metric | Value |
-|---|---|---|---|---|
-| macro-F1 | **0.797** | | MFS | **0.954** |
-| MPS      | **0.892** | | CSA | **0.753** |
-| RPC      | 0.350     | | HR  | **0.0005** |
-
-</div>
-
-Per-family validation F1 is uniformly strong — even the rare `PK_ABSORPTION` family (0.91 % of corpus, n = 28 in val) reaches MFS 0.981, MPS 0.923, CSA 0.929.
-
-> **Retrieval ablation.** On the same 5 000 stratified `random_full.test` pairs and the same checkpoint, **removing the neighbour block collapses macro-F1 from 0.797 to 0.178** (−62 pp). Without retrieval the student over-predicts `PK_METABOLISM` 3× the gold rate and assigns near-zero mass to `EFFICACY` and `PK_DISTRIBUTION`.
+Auxiliary metrics: <code>cfs</code> (consensus-family score), <code>slfs</code> (step-level faithfulness), <code>mor</code> (mechanism-of-action retrieval gate), <code>ris</code> (retrieval-influence score).
 
 <br>
 
@@ -404,7 +466,7 @@ Per-family validation F1 is uniformly strong — even the rare `PK_ABSORPTION` f
 pytest -q
 ```
 
-Covers: every metric (`test_metrics.py`), the eval harness end-to-end on a tiny fixture (`test_eval_harness.py`), preference-pair construction (`test_preference_pairs.py`), and the abstention calibrator (`test_abstention.py`).
+Covers every metric (`test_metrics.py`), the eval harness end-to-end on a tiny fixture (`test_eval_harness.py`), preference-pair construction (`test_preference_pairs.py`), and the abstention calibrator (`test_abstention.py`).
 
 <br>
 
