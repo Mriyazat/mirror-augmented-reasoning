@@ -301,7 +301,21 @@ $$
 \mathcal{L}\bigl(p_{\text{AB}}, p_{\text{BA}}\bigr) \;=\; \mathcal{L}_{\text{SFT}}(p_{\text{AB}}) + \mathcal{L}_{\text{SFT}}(p_{\text{BA}}) \;+\; \lambda \cdot \mathrm{KL}\!\left( \mathrm{softmax}(z^{\text{AB}}_{\text{tag}}) \;\big\|\; T_{\pi}\bigl[\mathrm{softmax}(z^{\text{BA}}_{\text{tag}})\bigr] \right)
 $$
 
-where $T_{\pi}$ permutes the four direction tokens (AB↔BA, BIDIR↔BIDIR, N/A↔N/A). The KL fires **only** on the direction-tag token, leaving the free-form reasoning uncoupled — which is the key reason it works.
+The direction tag takes one of four values:
+
+<table>
+<thead>
+<tr><th align="left" width="14%">Tag</th><th align="left">Meaning</th></tr>
+</thead>
+<tbody>
+<tr><td><code>AB</code></td>    <td>Drug A acts on drug B (one-directional effect of A &rarr; B).</td></tr>
+<tr><td><code>BA</code></td>    <td>Drug B acts on drug A (one-directional effect of B &rarr; A).</td></tr>
+<tr><td><code>BIDIR</code></td> <td>Bidirectional — each drug affects the other.</td></tr>
+<tr><td><code>N/A</code></td>   <td>No directional claim — a purely mechanistic description that says the two drugs interact but does not single out a perpetrator and a victim. Example: a shared-pathway pharmacodynamic synergy described in symmetric terms.</td></tr>
+</tbody>
+</table>
+
+$T_{\pi}$ is the mirror permutation on these four tokens: <code>AB ↔ BA</code> swap when the pair is flipped, while <code>BIDIR</code> and <code>N/A</code> are invariant (<code>BIDIR ↔ BIDIR</code>, <code>N/A ↔ N/A</code>). The KL term fires **only** on the direction-tag token, leaving the free-form reasoning uncoupled — which is the key reason it works.
 
 ### 2 · PRM-weighted DPO
 
