@@ -22,68 +22,7 @@
 
 <br>
 
-> **TL;DR** &nbsp; Three frontier teachers each generate many candidate traces per drug pair under a temperature schedule. A fine-tuned **DDI-PRM critic** plus a stack of deterministic rule gates collapse those candidates into a single consensus trace. A 7B Qwen student is then trained in three stages — **SFT with a position-restricted symmetry-KL loss** (mirror AB↔BA agreement), **PRM-weighted DPO**, and a hard-negative polish — and evaluated under an 8-metric suite on three split protocols of increasing generalisation difficulty.
-
-<br>
-
-## Pipeline
-
-<table align="center">
-<tr>
-  <td align="center" width="22%">
-    <sub><b>PHASE A</b></sub><br>
-    <b>Corpus &amp; Retrieval</b><br><br>
-    <sub>DrugBank parse · hierarchical taxonomy · leakage-safe splits · 4-component mechanism-aware retrieval index</sub>
-  </td>
-  <td align="center" width="3%"><sub>→</sub></td>
-  <td align="center" width="22%">
-    <sub><b>PHASE B</b></sub><br>
-    <b>Multi-Teacher Consensus</b><br><br>
-    <sub>3 frontier teachers × many candidates · rule QC gates · DDI-PRM critic · cross-LLM merge</sub>
-  </td>
-  <td align="center" width="3%"><sub>→</sub></td>
-  <td align="center" width="22%">
-    <sub><b>PHASE C</b></sub><br>
-    <b>Student Training</b><br><br>
-    <sub>Qwen-2.5-7B + LoRA · tier-weighted SFT + symmetry-KL · PRM-weighted DPO · hard-negative polish</sub>
-  </td>
-  <td align="center" width="3%"><sub>→</sub></td>
-  <td align="center" width="22%">
-    <sub><b>PHASE D</b></sub><br>
-    <b>Evaluation</b><br><br>
-    <sub>JSON-constrained inference · conformal abstention · 8-metric suite on 3 splits</sub>
-  </td>
-</tr>
-</table>
-
-```mermaid
-flowchart LR
-    classDef phase fill:#0f172a,stroke:#475569,stroke-width:1px,color:#e2e8f0,rx:8,ry:8
-    classDef ground fill:#1e293b,stroke:#334155,stroke-width:1px,color:#cbd5e1,rx:6,ry:6
-
-    A1["DrugBank XML"]:::ground
-    A2["Taxonomy<br/>(families · subtypes · direction)"]:::ground
-    A3["Splits<br/>random_full · drug_cold · pair_cold"]:::ground
-    A4["Retrieval index<br/>pathway · protein · ATC · SMILES"]:::ground
-
-    B1["Teacher generation<br/>vLLM · temperature schedule"]:::ground
-    B2["Rule QC gates<br/>G1 … G10"]:::ground
-    B3["DDI-PRM step critic"]:::ground
-    B4["Cross-LLM consensus<br/>+ reasoning-safety filter"]:::ground
-
-    C1["SFT<br/>tier-weighted CE<br/>+ faithfulness<br/>+ symmetry-KL"]:::ground
-    C2["PRM-weighted DPO<br/>exact hook · IS fallback"]:::ground
-    C3["Hard-negative polish<br/>family · axis · subtype · direction"]:::ground
-
-    D1["JSON-constrained<br/>inference"]:::ground
-    D2["Conformal +<br/>entropy abstention"]:::ground
-    D3["8-metric suite<br/>× 3 split protocols"]:::ground
-
-    A1 --> A2 --> A3 --> A4 --> B1
-    B1 --> B2 --> B3 --> B4 --> C1
-    C1 --> C2 --> C3 --> D1
-    D1 --> D2 --> D3
-```
+> **TL;DR** &nbsp; Three frontier teacher LLMs (Qwen-2.5-72B, DeepSeek-R1-Distill-70B, Llama-3.3-70B) each generate many candidate reasoning traces per drug pair under a temperature schedule. A fine-tuned **DDI process reward model (DDI-PRM)** critic plus a stack of deterministic rule-based quality-control (QC) gates collapse those candidates into a single consensus trace per pair. A 7B Qwen student is then trained in three stages — **supervised fine-tuning (SFT)** with a position-restricted symmetry-KL loss that ties the direction prediction across the AB and BA surface orderings of the same pair (drug A listed first vs. drug B listed first), **PRM-weighted direct preference optimization (DPO)**, and a final hard-negative polish — and evaluated under an 8-metric suite on three split protocols of increasing generalisation difficulty.
 
 <br>
 
@@ -159,7 +98,7 @@ CoT_DDI/
 │   │   ├── critic_rerank.py             PRM rerank within teacher
 │   │   ├── merge.py · merge_consensus.py cross-LLM consensus merge
 │   │   ├── apply_reasoning_safety.py    citation / direction-verb filter
-│   │   ├── llm_judge.py                 GPT / Claude / Gemini OOF probe
+│   │   ├── llm_judge.py                 GPT / Claude / Gemini out-of-family (OOF) judge probe
 │   │   ├── build_preference_pairs.py
 │   │   ├── build_direction_mirror_preferences.py
 │   │   └── build_phase4_hard_negative_preferences.py
@@ -298,7 +237,7 @@ python -m src.teacher.build_phase4_hard_negative_preferences
 ```
 
 <details>
-<summary><b>Optional · frontier LLM-as-judge OOF probe (GPT / Claude / Gemini)</b></summary>
+<summary><b>Optional · frontier LLM-as-judge out-of-family (OOF) probe (GPT / Claude / Gemini)</b></summary>
 
 ```bash
 export OPENAI_API_KEY=...
@@ -309,7 +248,7 @@ python -m src.teacher.llm_judge
 
 </details>
 
-### C · Student training (Qwen-2.5-7B + LoRA)
+### C · Student training (Qwen-2.5-7B + Low-Rank Adaptation, LoRA)
 
 ```bash
 # C0 — tier-weighted SFT + mirror preference corpora
@@ -320,7 +259,7 @@ python -m src.data.build_mirror_sft_corpus
 accelerate launch --config_file configs/accelerate_fsdp_qwen.yaml \
     -m src.training.sft_train
 
-# C2 — PRM-weighted DPO / IPO with four programmatic hard-negative families
+# C2 — PRM-weighted DPO / Identity-PO (IPO) with four programmatic hard-negative families
 accelerate launch --config_file configs/accelerate_fsdp_qwen.yaml \
     -m src.training.dpo_mirror
 

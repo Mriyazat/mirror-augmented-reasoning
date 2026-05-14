@@ -6,8 +6,8 @@ Thin shell wrappers around the per-phase `python -m` entry points. Each script `
 |---|---|---|
 | `download_models.py`    | —       | One-shot HuggingFace snapshot of every model the pipeline uses (teachers, PRM base, student). Supports `--only <alias>` for partial downloads. |
 | `run_phase_a.sh`        | A       | Parse DrugBank → parquet · pathway / PK enrichment · taxonomy · splits · audits. |
-| `run_phase_b.sh`        | B       | DDI-PRM training · candidate generation per teacher · rule QC · PRM critic · cross-LLM consensus · reasoning-safety filter · preference corpora. |
-| `run_phase_c.sh`        | C       | Tier-weighted SFT (+ symmetry-KL) · PRM-weighted DPO (+ hard-negatives) · optional classifier head. |
+| `run_phase_b.sh`        | B       | DDI process reward model (DDI-PRM) training · candidate generation per teacher · rule QC · PRM critic · cross-LLM consensus · reasoning-safety filter · preference corpora. |
+| `run_phase_c.sh`        | C       | Tier-weighted supervised fine-tuning (SFT, + symmetry-KL) · PRM-weighted direct preference optimization (DPO, + hard-negatives) · optional classifier head. |
 | `run_phase_d.sh`        | D       | JSON-constrained inference · conformal abstention · XGBoost reference · 8-metric eval · stress sets. |
 | `run_all.sh`            | A → D   | Convenience driver chaining the four phase scripts. |
 
