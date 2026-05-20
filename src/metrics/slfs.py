@@ -1,7 +1,6 @@
-"""SLFS -- Step-Level Faithfulness Score (novelty pillar P6).
-
-Definition (plan §8)
---------------------
+"""SLFS -- Step-Level Faithfulness Score.
+Definition
+----------
     SLFS = mean DDI-PRM step score on the model's reasoning steps.
 
 Scope
@@ -38,7 +37,7 @@ Design choices
     genuinely missing).  Pass `exclude_meta=True` to restrict SLFS to
     rationale-only steps if you want the PK/mechanism signal alone.
 
-4.  **Min-plus aggregation (optional).**  The B4 critic uses "min-plus"
+4.  **Min-plus aggregation (optional).**  The PRM-guided critic uses "min-plus"
     aggregation (min of dimension scores plus a small reward for the
     second-worst, used to penalize the one-bad-step failure mode).
     We expose this via `aggregator="min_plus"`.  Default is "mean".

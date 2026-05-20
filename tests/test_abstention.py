@@ -1,4 +1,4 @@
-"""Smoke tests for the abstention module."""
+"""Unit tests for the abstention module."""
 from __future__ import annotations
 
 import random

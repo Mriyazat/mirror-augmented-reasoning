@@ -5,24 +5,24 @@ Gates (in order — short-circuits on failure where sensible):
   G1 schema          trace parses as JSON, matches rubric.step_schema
                        (uses validators from src.teacher.schema)
   G2 evidence_ids    every cited ID ∈ ContextBundle.context_ids()
-                       (CRITICAL — V3 hallucination fix)
+                       (critical to mitigate hallucinated entities)
   G3 direction       final_answer.direction_tag matches gold_direction
                        AND no step asserts a direction contradicting gold
-                       (CRITICAL — V3's 51.4% mirror-direction errors)
+                       (CRITICAL — the earlier baseline's 51.4% mirror-direction errors)
   G4 family          final_answer.family == gold_family
                        (lets us use valid traces as SFT demonstrations)
   G5 polarity        final_answer.polarity matches gold_polarity if gold set
   G6 banned_phrases  no silencing language ("I cannot" / "insufficient info")
                        unless final_answer.abstain = True
-                       (V3's "silence rewards precision" fix)
+                       (the earlier baseline's "silence rewards precision" fix)
   G7 length_bounds   2–12 steps; each step 5-200 words
   G8 summary         final_answer.summary present, within soft/hard word
                        cap, names at least drug A or B (soft)
   G9 hedging         hedge-marker density in summary ≤ max_hedge_density
-                       (SELFDOUBT arxiv 2604.06389; V3 hedging-amplif fix);
+                       (SELFDOUBT arxiv 2604.06389; earlier hedging-amplification fix);
                        bypassed when abstain=True (soft)
   G10 subtype        final_answer.subtype ∈ SUBTYPE_VOCAB[gold_family]
-                       (V3 "correct-reason-wrong-class" fix; NEAR-MISS
+                       ("correct-reason-wrong-class" failure fix; NEAR-MISS
                        traces are preserved via tier tagging in merge.py)
 
 A record can be tagged one of three tiers (for downstream weighting):
@@ -78,7 +78,7 @@ def _gate_schema(rec: dict) -> tuple[bool, list[str], dict | None]:
 def _gate_evidence(parsed: dict, context_ids: set[str]) -> tuple[bool, list[str]]:
     """G2 (critical): every evidence_id cited in a step must resolve to some
     canonical form in the retrieved context pool.  Resolution logic lives in
-    `src.teacher.evidence_resolution` (shared with Phase E metrics).
+    `src.teacher.evidence_resolution` (shared with evaluation metrics).
     """
     expanded = expand_context_ids(context_ids)
     bad_total = 0

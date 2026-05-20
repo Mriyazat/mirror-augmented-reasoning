@@ -1,7 +1,6 @@
-"""MFS -- Mechanism-Faithfulness Score (novelty pillar P5).
-
-Definition (plan §8)
---------------------
+"""MFS -- Mechanism-Faithfulness Score.
+Definition
+----------
     MFS = fraction of rationale claims that cite at least one evidence ID
           which resolves to the retrieved pathway / PK / proteomics context.
 
@@ -35,7 +34,7 @@ Design choices
 
 4.  **Shared resolver.**  MFS reuses `src.teacher.evidence_resolution`
     exactly as the QC G2 gate does.  This is load-bearing: if MFS and G2
-    disagreed on what "resolves", our Phase E results would contradict
+    disagreed on what "resolves", our evaluation results would contradict
     our Phase B QC reports.
 
 5.  **Fractional mode.**  Alongside the strict binary score, we expose a

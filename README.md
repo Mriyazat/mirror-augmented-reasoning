@@ -1,438 +1,142 @@
-<div align="center">
+# DDI Verifier: PRM-Guided Distillation and Verifier-Reranked Inference for Drug-Drug Interaction Prediction
 
-# CoT&#8209;DDI
+Research code accompanying our EMNLP 2026 submission.
 
-### Mirror-Augmented Reasoning Distillation with PRM-Weighted Preference Optimization for Drug–Drug Interaction Mechanism Prediction
+The pipeline produces a small, calibrated DDI predictor that emits
+mechanism-grounded reasoning traces. At a high level it has four phases:
 
-<br>
+- **Phase A — Data construction.** A DrugBank-derived corpus, a curated
+  7-family / multi-subtype label taxonomy with directionality, pair-level
+  mechanistic signatures, and three reproducible train/val/test splits
+  (random, drug-cold, pair-cold) plus a stratified development subset.
+- **Phase B — Teacher generation and PRM training.** A heterogeneous
+  three-teacher ensemble (Llama-3.3-70B, Qwen2.5-72B,
+  DeepSeek-R1-Distill-Llama-70B) produces step-structured reasoning
+  traces. A Process Reward Model is then trained on auto-verifiable
+  step-level signals (evidence grounding, direction preservation, family
+  consistency, PK-flag consistency, and others) to filter and re-rank
+  candidate traces.
+- **Phase C — Student training.** A 7B student is fine-tuned on the
+  PRM-filtered teacher traces with a faithfulness loss and a mirror-pair
+  symmetry-KL term, followed by preference optimization on hard-negative
+  and direction-mirror pairs.
+- **Phase D — Evaluation.** Standard classification metrics together
+  with the novel reasoning-faithfulness metrics introduced in this work,
+  conformal abstention, verifier re-ranking, and head-to-head
+  comparisons against frontier LLMs and DDI-specific baselines.
 
-<p>
-  <a href="#"><img alt="Python" src="https://img.shields.io/badge/python-3.11%20%7C%203.13-3776AB?logo=python&logoColor=white"></a>
-  <a href="#"><img alt="PyTorch" src="https://img.shields.io/badge/PyTorch-2.3+-EE4C2C?logo=pytorch&logoColor=white"></a>
-  <a href="#"><img alt="Transformers" src="https://img.shields.io/badge/🤗_Transformers-4.42-yellow"></a>
-  <a href="#"><img alt="TRL" src="https://img.shields.io/badge/🤗_TRL-0.9.4-blueviolet"></a>
-  <a href="#"><img alt="vLLM" src="https://img.shields.io/badge/vLLM-0.16-1e90ff"></a>
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-MIT-22c55e"></a>
-  <a href="#"><img alt="Lint" src="https://img.shields.io/badge/lint-ruff-orange"></a>
-</p>
+This repository is the source code, configuration, and example launchers
+that produced the results in the paper.
 
-<sub>A 7B reasoner that explains the <em>mechanism</em>, not just the label — and stays consistent when you flip the pair.</sub>
-
-</div>
-
-<br>
-
-> **TL;DR** &nbsp; Three frontier teacher LLMs (Qwen-2.5-72B, DeepSeek-R1-Distill-70B, Llama-3.3-70B) each generate many candidate reasoning traces per drug pair under a temperature schedule. A fine-tuned **DDI process reward model (DDI-PRM)** critic plus a stack of deterministic rule-based quality-control (QC) gates collapse those candidates into a single consensus trace per pair. A 7B Qwen student is then trained in three stages — **supervised fine-tuning (SFT)** with a position-restricted symmetry-KL loss that ties the direction prediction across the AB and BA surface orderings of the same pair (drug A listed first vs. drug B listed first), **PRM-weighted direct preference optimization (DPO)**, and a final hard-negative polish — and evaluated under an 8-metric suite on three split protocols of increasing generalisation difficulty.
-
-<br>
-
-## Why this exists
-
-Most DDI benchmarks score **one number** — the top-1 label of a feature or graph classifier. In the clinic that is not enough. A pharmacist needs the **mechanism** (which CYP, transporter, or pharmacodynamic axis), the **direction** (A→B, B→A, bidirectional, or none), the **evidence**, and a calibrated **abstention** when the evidence is thin.
-
-Three failure modes block naive teacher-to-student distillation:
-
-<table>
-<thead>
-<tr><th align="left" width="22%">Failure</th><th align="left" width="42%">What it looks like</th><th align="left" width="36%">How we address it</th></tr>
-</thead>
-<tbody>
-<tr>
-  <td><b>Mirror inconsistency</b></td>
-  <td>The same pair flipped AB↔BA gets different family / direction predictions.</td>
-  <td>Co-batched AB &amp; BA records + position-restricted symmetry-KL on the direction tag.</td>
-</tr>
-<tr>
-  <td><b>Class imbalance</b></td>
-  <td>One family dominates; rare families are abstained away under naive cross-entropy.</td>
-  <td>Class-balanced <code>1/√n<sub>f</sub></code> sampling + family-axis hard-negatives.</td>
-</tr>
-<tr>
-  <td><b>Reasoning decay</b></td>
-  <td>Student parrots teacher phrasing and cites phantom evidence.</td>
-  <td>DDI-PRM step critic + 10 rule QC gates + reasoning-safety filter.</td>
-</tr>
-</tbody>
-</table>
-
-<br>
-
-## Repository layout
+## Repository Layout
 
 ```
-CoT_DDI/
-├── configs/                       YAML configs for every phase
-│   ├── base.yaml                  paths · splits · models · loss weights · GO/NO-GO thresholds
-│   ├── prm_rubric.yaml            step-level rubric for the DDI-PRM
-│   └── accelerate_fsdp*.yaml      FSDP / mixed-precision per training stage
-│
-├── scripts/                       Pipeline runners (one shell wrapper per phase)
-│   ├── download_models.py               HF snapshot of every teacher / PRM / student
-│   ├── run_phase_a.sh                   Phase A — corpus / taxonomy / splits / audits
-│   ├── run_phase_b.sh                   Phase B — PRM · teachers · QC · consensus · prefs
-│   ├── run_phase_c.sh                   Phase C — SFT + symmetry-KL · PRM-DPO · head
-│   ├── run_phase_d.sh                   Phase D — inference · abstention · eval · stress
-│   └── run_all.sh                       end-to-end A → D
-│
+EMNLP2026_DDI_Verifier_Release/
+├── configs/                  # YAML configs (base + PRM rubric + FSDP)
+├── docs/                     # Pipeline overview, reproducibility notes
+├── notebooks/                # Optional analysis notebooks
+├── scripts/
+│   ├── cluster_examples/     # Example portable SLURM launchers
+│   └── examples/             # Example local commands
 ├── src/
-│   ├── data/                      Phase A — corpus construction
-│   │   ├── parse_drugbank.py            XML → parquet (drugs, pairs, pathways, x-refs, brands)
-│   │   ├── fetch_pathways.py            KEGG + SMPDB pathway harvest
-│   │   ├── build_pk_table.py            CYP / P-gp / OATP / BCRP flags per drug
-│   │   ├── build_signatures.py          pair-level pathway- &amp; protein-Jaccard signatures
-│   │   ├── build_taxonomy.py            hierarchical mechanism taxonomy
-│   │   ├── build_splits.py              random_full / drug_cold / pair_cold + subset
-│   │   ├── build_mirror_sft_corpus.py   AB + BA mirror records for SFT
-│   │   ├── build_adversarial.py         direction-flip / negation stress set
-│   │   ├── build_counterfactual.py      single-PK-flag perturbations
-│   │   ├── build_polypharmacy.py        3-drug combinations
-│   │   ├── build_student_eval_prompts.py prompts with top-K retrieval block
-│   │   └── prepare_phase_c.py           tier-weighted SFT + preference corpus
-│   │
-│   ├── audit/                     Phase A audits + GO/NO-GO freeze
-│   ├── teacher/                   Phase B — generation, QC, PRM, consensus
-│   │   ├── prompt.py · schema.py · context_builder.py · provider.py
-│   │   ├── generate.py                  vLLM-backed candidate generation per teacher
-│   │   ├── qc.py                        10 rule gates G1 … G10
-│   │   ├── critic.py · prm_data.py · prm_train.py · prm_verify.py
-│   │   ├── critic_rerank.py             PRM rerank within teacher
-│   │   ├── merge.py · merge_consensus.py cross-LLM consensus merge
-│   │   ├── apply_reasoning_safety.py    citation / direction-verb filter
-│   │   ├── llm_judge.py                 GPT / Claude / Gemini out-of-family (OOF) judge probe
-│   │   ├── build_preference_pairs.py
-│   │   ├── build_direction_mirror_preferences.py
-│   │   └── build_phase4_hard_negative_preferences.py
-│   │
-│   ├── training/                  Phase C — student
-│   │   ├── sft_train.py                 tier-weighted SFT + faithfulness + symmetry-KL
-│   │   ├── dpo_mirror.py                PRM-weighted DPO / IPO (exact hook + IS fallback)
-│   │   ├── train_classifier_head.py
-│   │   └── evaluate_sweep.py · summarize_sweep.py
-│   │
-│   ├── inference/                 Phase D — prediction
-│   │   ├── predict.py                   JSON-constrained inference with retrieval block
-│   │   ├── abstention.py                conformal + entropy gating
-│   │   └── augment_predictions.py
-│   │
-│   ├── evaluation/                Phase D — eval harness + baselines
-│   │   ├── run_full_eval.py             full 8-metric suite on all 3 splits
-│   │   └── baseline_xgboost.py          gradient-boosted reference over the same features
-│   │
-│   └── metrics/                   one module per metric, unit-tested
-│       mfs.py  mps.py  csa.py  rpc.py  au.py  hr.py  ths.py
-│       cfs.py  slfs.py  mor.py  ris.py
-│
-├── tests/                         pytest unit tests
-└── requirements.txt
+│   ├── audit/                # Data-integrity audits
+│   ├── data/                 # Corpus construction + split builders
+│   ├── teacher/              # Teacher generation, PRM, critic, judges
+│   ├── training/             # SFT + DPO + sweep tooling
+│   ├── inference/            # Predict + verifier re-rank + abstention
+│   ├── evaluation/           # Eval harness + bootstrap CIs + analyses
+│   ├── metrics/              # Novel + standard metrics
+│   └── visualization/        # Figure / table generation
+├── tests/                    # Unit tests
+├── requirements.txt
+├── LICENSE
+└── README.md
 ```
-
-<br>
 
 ## Installation
 
-> **Python ≥ 3.11.** Verified on macOS arm64 and Linux x86_64 with CUDA 12.2.
-
 ```bash
-git clone https://github.com/Mriyazat/CoT_DDI.git
-cd CoT_DDI
-
+git clone <repository-url> EMNLP2026_DDI_Verifier_Release
+cd EMNLP2026_DDI_Verifier_Release
 python -m venv .venv
 source .venv/bin/activate
-
 pip install --upgrade pip
 pip install -r requirements.txt
 python -m spacy download en_core_web_sm
-
-export PYTHONPATH="$(pwd)"
+export PYTHONPATH="$PWD:$PYTHONPATH"
 ```
 
-> **GPU note.** `torch-geometric` and `vLLM` are not pinned in `requirements.txt` — install the CUDA-matched build separately on your training node. `rdkit` is optional (only the MOR retrieval-gate audit uses it).
+For GPU clusters, portable example launchers live under
+`scripts/cluster_examples/`. They target a typical 4 x H100 80GB node
+and read `--account`, venv path, and module names from environment
+variables (see `scripts/cluster_examples/setup_env.sh` and
+`scripts/cluster_examples/activate_env.sh`).
 
-### Data
+## Environment Variables
 
-DrugBank is licensed and not redistributable. Download `drugbank_2026-04.xml` from <https://go.drugbank.com/releases> and place it at:
+| Variable             | Purpose                                                  |
+| -------------------- | -------------------------------------------------------- |
+| `DDI_ROOT`           | Repository root (defaults to `.`)                        |
+| `DDI_OUTPUTS`        | Output directory for predictions and eval artifacts      |
+| `DDI_CKPT`           | Checkpoint directory for student and PRM adapters        |
+| `OPENAI_API_KEY`     | Required for `--provider openai` frontier evaluations    |
+| `ANTHROPIC_API_KEY`  | Required for `--provider anthropic` judges               |
+| `GOOGLE_API_KEY`     | Required for `--provider google` (Gemini) judges         |
 
-```
-data_raw/drugbank_2026-04.xml
-```
+## Data
 
-Optional auxiliary sources (paths in `configs/base.yaml`):
+The pipeline operates on a fixed DrugBank XML release (the exact version
+is recorded in `configs/base.yaml -> data_sources.drugbank`) together
+with DDInter severity metadata (used only as metadata, never as a
+prediction target) and KEGG / SMPDB pathway maps.
 
-- **DDInter 2** &nbsp;— severity metadata, *never* used as a label &nbsp;→ &nbsp;`data_raw/ddinter_2/`
-- **KEGG / SMPDB** &nbsp;— pathway dumps &nbsp;→ &nbsp;`data_raw/pathways/`
+Raw redistributable data is **not** included here. After obtaining
+DrugBank (license required) and the pathway dumps, the data-construction
+modules in `src/data/` reconstruct the canonical processed parquets and
+JSONL splits. The exact file paths, expected counts, and SHA-256 hashes
+are pinned in `configs/base.yaml`.
 
-<br>
+## Evaluation
 
-## Run the pipeline
-
-Every step is a self-contained `python -m` entry point that reads/writes parquet & JSONL artefacts. Run them in order — either via the per-phase shell wrappers under `scripts/`:
+Headline numbers are produced by `src.evaluation.run_full_eval`, which
+takes a predictions JSONL plus a ground-truth manifest and writes the
+full metrics table together with bootstrap confidence intervals to
+`outputs/results/<run_name>/`.
 
 ```bash
-# end-to-end
-bash scripts/run_all.sh
-
-# or one phase at a time
-bash scripts/run_phase_a.sh
-bash scripts/run_phase_b.sh
-bash scripts/run_phase_c.sh
-CHECKPOINT=outputs/student/dpo/<run>  bash scripts/run_phase_d.sh
+python -m src.evaluation.run_full_eval \
+    --predictions outputs/predictions/student_rerank.jsonl \
+    --labels      data_processed/labels_hierarchical.parquet \
+    --split       random_full \
+    --run_name    student_rerank
 ```
 
-…or by invoking the underlying entry points directly:
-
-### A · Corpus, taxonomy, splits
-
-```bash
-# A1 — parse DrugBank XML → parquet (drugs, pairs, pathways, x-refs, brands)
-python -m src.data.parse_drugbank
-
-# A2 — pathway / target enrichment (KEGG + SMPDB) and per-drug PK flags
-python -m src.data.fetch_pathways
-python -m src.data.build_pk_table
-python -m src.data.build_signatures
-
-# A3 — hierarchical mechanism taxonomy
-python -m src.data.build_taxonomy
-
-# A4 — three split protocols + balanced teacher subset
-python -m src.data.build_splits
-
-# A5 — audits + GO/NO-GO freeze
-python -m src.audit.a06_label_cooccurrence
-python -m src.audit.a07_ddinter_severity
-python -m src.audit.drug_completeness
-python -m src.audit.freeze_phase_a
-```
-
-### B · Multi-teacher consensus
-
-```bash
-# B0 — train the DDI-PRM critic (rubric: configs/prm_rubric.yaml)
-python -m src.teacher.prm_data
-python -m src.teacher.prm_train
-python -m src.teacher.prm_verify
-
-# B1 — candidate generation per teacher under a temperature schedule
-#       (vLLM server expected at $OPENAI_API_BASE)
-python -m src.teacher.generate --split subset --teacher llama-3.3-70b
-python -m src.teacher.generate --split subset --teacher qwen-2.5-72b
-python -m src.teacher.generate --split subset --teacher deepseek-r1-70b
-
-# B2 — 10 deterministic rule gates G1 … G10
-python -m src.teacher.qc
-
-# B3 — PRM step-level critic + best-of rerank within each teacher
-python -m src.teacher.critic
-python -m src.teacher.critic_rerank
-
-# B4 — cross-LLM consensus merge + reasoning-safety filter
-python -m src.teacher.merge_consensus
-python -m src.teacher.apply_reasoning_safety
-python -m src.teacher.audit_teacher_clean
-
-# B5 — preference corpora for Phase C
-python -m src.teacher.build_preference_pairs
-python -m src.teacher.build_direction_mirror_preferences
-python -m src.teacher.build_phase4_hard_negative_preferences
-```
-
-<details>
-<summary><b>Optional · frontier LLM-as-judge out-of-family (OOF) probe (GPT / Claude / Gemini)</b></summary>
-
-```bash
-export OPENAI_API_KEY=...
-export ANTHROPIC_API_KEY=...
-python -m src.teacher.sample_for_judge
-python -m src.teacher.llm_judge
-```
-
-</details>
-
-### C · Student training (Qwen-2.5-7B + Low-Rank Adaptation, LoRA)
-
-```bash
-# C0 — tier-weighted SFT + mirror preference corpora
-python -m src.data.prepare_phase_c
-python -m src.data.build_mirror_sft_corpus
-
-# C1 — SFT with tier-weighted CE + faithfulness + symmetry-KL on the direction tag
-accelerate launch --config_file configs/accelerate_fsdp_qwen.yaml \
-    -m src.training.sft_train
-
-# C2 — PRM-weighted DPO / Identity-PO (IPO) with four programmatic hard-negative families
-accelerate launch --config_file configs/accelerate_fsdp_qwen.yaml \
-    -m src.training.dpo_mirror
-
-# C3 — (optional) classifier head over the frozen reasoner
-python -m src.training.train_classifier_head
-```
-
-### D · Evaluation
-
-```bash
-# D1 — build evaluation prompts with the top-K mechanism-aware neighbour block
-python -m src.data.build_student_eval_prompts
-
-# D2 — student inference + JSON-constrained parse + abstention
-python -m src.inference.predict     --split pair_cold --checkpoint <path-to-LoRA>
-python -m src.inference.abstention
-
-# D3 — gradient-boosted reference over the same 4-component features
-python -m src.evaluation.baseline_xgboost
-
-# D4 — full 8-metric suite on random_full / drug_cold / pair_cold
-python -m src.evaluation.run_full_eval
-
-# D5 — stress sets
-python -m src.data.build_adversarial
-python -m src.data.build_counterfactual
-python -m src.data.build_polypharmacy
-```
-
-<br>
-
-## Method at a glance
-
-### 1 · Position-restricted symmetry-KL — the mirror constraint
-
-For every co-batched (AB, BA) pair the loss is
-
-$$
-\mathcal{L}\bigl(p_{\text{AB}}, p_{\text{BA}}\bigr) \;=\; \mathcal{L}_{\text{SFT}}(p_{\text{AB}}) + \mathcal{L}_{\text{SFT}}(p_{\text{BA}}) \;+\; \lambda \cdot \mathrm{KL}\!\left( \mathrm{softmax}(z^{\text{AB}}_{\text{tag}}) \;\big\|\; T_{\pi}\bigl[\mathrm{softmax}(z^{\text{BA}}_{\text{tag}})\bigr] \right)
-$$
-
-The direction tag takes one of four values:
-
-<table>
-<thead>
-<tr><th align="left" width="14%">Tag</th><th align="left">Meaning</th></tr>
-</thead>
-<tbody>
-<tr><td><code>AB</code></td>    <td>Drug A acts on drug B (one-directional effect of A &rarr; B).</td></tr>
-<tr><td><code>BA</code></td>    <td>Drug B acts on drug A (one-directional effect of B &rarr; A).</td></tr>
-<tr><td><code>BIDIR</code></td> <td>Bidirectional — each drug affects the other.</td></tr>
-<tr><td><code>N/A</code></td>   <td>No directional claim — a purely mechanistic description that says the two drugs interact but does not single out a perpetrator and a victim. Example: a shared-pathway pharmacodynamic synergy described in symmetric terms.</td></tr>
-</tbody>
-</table>
-
-$T_{\pi}$ is the mirror permutation on these four tokens: <code>AB ↔ BA</code> swap when the pair is flipped, while <code>BIDIR</code> and <code>N/A</code> are invariant (<code>BIDIR ↔ BIDIR</code>, <code>N/A ↔ N/A</code>). The KL term fires **only** on the direction-tag token, leaving the free-form reasoning uncoupled — which is the key reason it works.
-
-### 2 · PRM-weighted DPO
-
-Per-pair weight from the DDI-PRM margin between chosen and rejected:
-
-$$
-w_i \;=\; \mathrm{clip}\!\bigl(\Phi_{\text{PRM}}(y^+_i) - \Phi_{\text{PRM}}(y^-_i),\; 0,\; 1\bigr), \qquad \mathcal{L}_{\text{PRM-DPO}} \;=\; -\sum_i w_i \log \sigma\bigl(\beta\,\Delta_i\bigr)
-$$
-
-Two interchangeable backends, dispatched by runtime capability detection:
-
-<table>
-<thead>
-<tr><th align="left">Backend</th><th align="left">When it is used</th><th align="left">How it implements Eq. (above)</th></tr>
-</thead>
-<tbody>
-<tr><td><b>Exact</b></td><td>TRL exposes a per-example <code>dpo_loss</code> hook</td><td>Monkey-patch the hook; multiply per-example losses by <code>w<sub>i</sub></code> before reduction.</td></tr>
-<tr><td><b>IS fallback</b></td><td>older TRL without the hook</td><td>Deterministic importance sampling: minibatches drawn ∝ <code>w<sub>i</sub></code>, standard DPO loss applied.</td></tr>
-</tbody>
-</table>
-
-### 3 · Four hard-negative families
-
-All edits are confined to the `final_answer` block so the trace prefix is identical to the chosen — preventing the student from exploiting surface artefacts.
-
-<table>
-<thead>
-<tr><th align="left" width="34%">Family</th><th align="left" width="36%">Construction</th><th align="left" width="30%">Targets</th></tr>
-</thead>
-<tbody>
-<tr><td><code>FAMILY-SWAP-TO-ADVERSERISK</code></td><td>rewrite final family to the dominant family</td><td>over-prediction attractor</td></tr>
-<tr><td><code>FAMILY-AXIS SWAP</code></td><td>swap family across a curated confusion-axis map</td><td>cross-family confusions</td></tr>
-<tr><td><code>SUBTYPE SWAP</code></td><td>keep family, sample a different in-family subtype</td><td>sub-family confusion</td></tr>
-<tr><td><code>DIRECTION FLIP</code></td><td>apply <code>T<sub>π</sub></code> to flip the direction tag</td><td>direction errors</td></tr>
-</tbody>
-</table>
-
-### 4 · Mechanism-aware retrieval
-
-Drug–drug similarity is a 4-component score:
-
-$$
-s(d_i, d_j) \;=\; w_p\, J_p \;+\; w_r\, J_r \;+\; w_a\, \tfrac{A}{7} \;+\; w_t\, T
-$$
-
-with $J_p$ = pathway Jaccard (SMPDB ∪ KEGG), $J_r$ = protein-target Jaccard, $A$ = deepest common ATC prefix depth, and $T$ = SMILES Tanimoto over Morgan-2 fingerprints. Pair–pair score takes the max of the two alignment options; the top-$K$ neighbour universe is restricted to the training split so test-side drugs never leak.
-
-<br>
-
-## Configuration
-
-Everything is driven by `configs/base.yaml`. The few knobs you usually touch:
-
-```yaml
-project:
-  seed: 42
-
-models:
-  student:
-    hf_id: Qwen/Qwen2.5-7B
-    lora_r: 64
-    lora_alpha: 128
-
-  teacher:
-    candidates_per_pair: 24
-    decoding:
-      temperature: 0.7
-      top_p: 0.9
-      max_tokens: 1024
-
-training:
-  sft:
-    epochs: 3
-    lr: 2.0e-4
-    faithfulness_loss_weight: 0.5
-    symmetry_loss_weight: 0.3
-  dpo:
-    beta: 0.1
-    prm_weight_exponent: 1.0
-    mirror_pair_ratio: 0.5
-
-abstention:
-  method: conformal_plus_entropy
-  target_coverage: 0.90
-
-retrieval:
-  top_k: 8
-  mor_floor: 0.55       # MOR validation gate
-```
-
-Per-phase FSDP / mixed-precision settings live in the `configs/accelerate_fsdp*.yaml` files.
-
-<br>
+Frontier-LLM comparison runs (GPT-4o, Claude Opus 4, Gemini 2.5 Pro) are
+launched through `scripts/examples/run_frontier_chain.sh`, which records
+the exact API model id and request parameters next to the predictions.
 
 ## Metrics
 
-The eval harness emits **eight metrics**, each in its own unit-tested module under `src/metrics/`.
+Beyond macro-F1 and accuracy, we report the following metrics
+(implemented in `src/metrics/` and re-exported by
+`src/metrics/__init__.py`):
 
-<table>
-<thead>
-<tr><th align="left" width="10%">#</th><th align="left" width="22%">Metric</th><th align="left">Measures</th></tr>
-</thead>
-<tbody>
-<tr><td align="center">1</td><td>macro-F1</td><td>Family classification — the standard DDI metric.</td></tr>
-<tr><td align="center">2</td><td><b>MFS</b> &nbsp; <code>mfs.py</code></td><td>Mirror Family Stability — fraction of pairs whose AB and BA predictions agree on family.</td></tr>
-<tr><td align="center">3</td><td><b>MPS</b> &nbsp; <code>mps.py</code></td><td>Mirror Prediction Symmetry — full (family, subtype, direction) triple agrees after applying T<sub>π</sub>.</td></tr>
-<tr><td align="center">4</td><td><b>CSA</b> &nbsp; <code>csa.py</code></td><td>Context-Support Alignment — prediction is supported by a verbatim cited identifier from the evidence pool.</td></tr>
-<tr><td align="center">5</td><td><b>RPC</b> &nbsp; <code>rpc.py</code></td><td>Reasoning-Path Coherence — mean step-level PRM score.</td></tr>
-<tr><td align="center">6</td><td><b>AU</b> &nbsp; <code>au.py</code></td><td>Abstention Utility — area under coverage-vs-accuracy curve under conformal abstention.</td></tr>
-<tr><td align="center">7</td><td><b>HR</b> &nbsp; <code>hr.py</code></td><td>Hallucination Rate — predictions citing identifiers not in the evidence pool.</td></tr>
-<tr><td align="center">8</td><td><b>THS</b> &nbsp; <code>ths.py</code></td><td>Tiered-Hierarchy Score — credit only when family, subtype <em>and</em> direction are all correct.</td></tr>
-</tbody>
-</table>
+| Metric | Meaning                                                      |
+| ------ | ------------------------------------------------------------ |
+| MFS    | Mechanism-Faithfulness Score (rationale vs. mechanism)       |
+| MPS    | Mirror-Pair Separation (direction-symmetry awareness)        |
+| CFS    | Counterfactual-Faithfulness Score                            |
+| RPC    | Reasoning-Prediction Coherence (rationale vs. final answer)  |
+| THS    | Taxonomy-Hierarchy Score                                     |
+| CSA    | Compositional-Subtype Accuracy                               |
+| HR     | Hallucination Rate (rationale entities outside DrugBank)     |
+| AU     | Abstention Utility (selective coverage / accuracy)           |
+| SLFS   | Selective-Label Faithfulness Score                           |
+| MOR    | Mechanism-Overlap Ratio (retrieval audit, optional)          |
 
-Auxiliary metrics: <code>cfs</code> (consensus-family score), <code>slfs</code> (step-level faithfulness), <code>mor</code> (mechanism-of-action retrieval gate), <code>ris</code> (retrieval-influence score).
-
-<br>
+Bootstrap confidence intervals and paired significance tests are in
+`src/evaluation/bootstrap_ci.py` and
+`src/evaluation/paired_bootstrap_significance.py`.
 
 ## Tests
 
@@ -440,12 +144,31 @@ Auxiliary metrics: <code>cfs</code> (consensus-family score), <code>slfs</code> 
 pytest -q
 ```
 
-Covers every metric (`test_metrics.py`), the eval harness end-to-end on a tiny fixture (`test_eval_harness.py`), preference-pair construction (`test_preference_pairs.py`), and the abstention calibrator (`test_abstention.py`).
-
-<br>
+Unit tests cover the metrics library, conformal abstention, preference
+pair construction, and the evaluation harness adapters.
 
 ## License
 
-[MIT](LICENSE).
+Released under the MIT License (see `LICENSE`). DrugBank and DDInter
+each have their own licenses; redistribution of those datasets from this
+repository is not permitted.
 
-DrugBank, DDInter, KEGG, and SMPDB are **not** included in this repository — obtain them from their respective providers under their own terms.
+## Citation
+
+```bibtex
+@inproceedings{ddi_verifier_emnlp2026,
+  title     = {PRM-Guided Distillation and Verifier-Reranked Inference
+               for Drug--Drug Interaction Prediction},
+  author    = {Anonymous},
+  booktitle = {Proceedings of EMNLP 2026},
+  year      = {2026}
+}
+```
+
+## Acknowledgments
+
+We thank the maintainers of the open-source projects this work builds
+upon, including [Med-PRM](https://github.com/dmis-lab/Med-PRM),
+HuggingFace Transformers / Accelerate / PEFT / TRL,
+[vLLM](https://github.com/vllm-project/vllm),
+and the OpenDDI baselines repository.

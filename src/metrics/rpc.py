@@ -1,19 +1,17 @@
-"""RPC -- Reasoning-Prediction Coherence (novelty pillar P5).
-
-Definition (plan §8)
---------------------
+"""RPC -- Reasoning-Prediction Coherence.
+Definition
+----------
     RPC = 1 - P(rationale-implied label != final prediction)
 
-Motivation -- the V3 failure this fixes
----------------------------------------
-V3's "silence rewards precision" bug (grounded_factuality.py:256-259)
-manifested as a model that hedged through the rationale ("I don't have
-enough evidence", "could be metabolism or adverse risk") and then
-committed to a random family in `final_answer.family`.  The rationale
-implied one thing, the final answer said another, and the loss function
-happened to reward that pattern.  RPC catches this by asking: what
-family does the REASONING point to, and does it match what the model
-FINALLY predicted?
+Motivation
+----------
+A "silence rewards precision" failure mode observed in earlier student
+baselines manifested as a model that hedged through the rationale
+("I don't have enough evidence", "could be metabolism or adverse risk")
+and then committed to an arbitrary family in `final_answer.family`. The
+rationale implied one thing while the final answer said another. RPC
+catches this by asking: what family does the REASONING point to, and
+does it match what the model FINALLY predicted?
 
 The challenge: how do we extract the "rationale-implied label"?
 ---------------------------------------------------------------
@@ -21,14 +19,14 @@ We need a label classifier that:
   (i)  operates on the trace steps (NOT on `final_answer`) so we can
        compare the two.
   (ii) is cheap and deterministic (so RPC can be run on every trace).
-  (iii) is pluggable (so the LLM-as-judge variant in Phase E can drop
+  (iii) is pluggable (so the LLM-as-judge variant in evaluation can drop
         in without rewriting the metric).
 
 Default classifier: lexical family-cue matching on step claims.
 We scan each rationale step's `claim` text for keywords associated with
-each family in the V4 taxonomy and return argmax.  This is the cheapest
-defensible extractor; paper-quality RPC should be cross-validated with
-an LLM judge on a ~200-trace subset (Phase D9).
+each family in the taxonomy and return argmax. This is the cheapest
+defensible extractor; for paper-quality RPC the lexical extractor should
+be cross-validated with an LLM-as-judge on a small held-out subset.
 
 The lexical classifier deliberately does NOT read `final_answer`, so
 RPC is a meaningful number -- the rationale's implied label is computed
@@ -59,7 +57,7 @@ Classifier = Callable[[dict], str | None]
 
 
 # ------------------------------------------------------------------
-# Lexical family-cue dictionary (V4 taxonomy)
+# Lexical family-cue dictionary (the family taxonomy)
 #
 # Taxonomy (from data_processed/taxonomy_schema.json):
 #   AdverseRisk  Efficacy  Other  PD_Activity  PK_Absorption
@@ -71,11 +69,11 @@ Classifier = Callable[[dict], str | None]
 # appears in both AdverseRisk and PD_Activity) are resolved by the
 # count + first-seen tie-breaker in `lexical_family_classifier`.
 #
-# Revised April 2026: added cues for Efficacy / PD_Activity / Other
+# Revised cue dictionary:
 # (previously missing -> all traces about these families scored as
 # `indeterminate` and were counted as incoherent on commit). Removed
 # stale cues for PK_Transport / PD_Synergy / PD_Antagonism /
-# Contraindication / Immunological (not families in V4).
+# Contraindication / Immunological (not families in the current taxonomy).
 # ------------------------------------------------------------------
 _FAMILY_CUES: dict[str, list[str]] = {
     "PK_Metabolism": [

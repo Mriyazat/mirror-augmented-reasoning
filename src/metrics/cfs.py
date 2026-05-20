@@ -1,7 +1,7 @@
-"""CfS -- Counterfactual Sensitivity (novelty pillar P8).
+"""CfS -- Counterfactual Sensitivity .
 
-Definition (plan §8)
---------------------
+Definition
+----------
     CfS = KL( P(y | original PK) || P(y | perturbed PK) )
           averaged over PK perturbations that SHOULD change the mechanism.
 
@@ -11,9 +11,9 @@ Definition (plan §8)
 
 Motivation
 ----------
-V3 baselines got away with label-co-occurrence shortcuts: the model
+earlier baselines got away with label-co-occurrence shortcuts: the model
 could predict CYP3A4 metabolism interactions from drug names without
-ever relying on the PK flags.  Our claim is that V4 is mechanism-aware,
+ever relying on the PK flags.  Our claim is that the model is mechanism-aware,
 not surface-pattern-aware.  A mechanism-aware model MUST change its
 prediction when you flip the PK flag that drives the mechanism, and it
 MUST NOT change when you flip an unrelated flag.  CfS measures both.
@@ -133,7 +133,7 @@ def cfs_corpus(records: Iterable[CounterfactualRecord],
             "eps":                    float,
         }
 
-    A positive `cfs_gap` >= plan §11 target (0.20) is the V4 success
+    A positive `cfs_gap` >= the metric specification target (0.20) is the success
     criterion.  A gap near zero means the model ignores PK flags.  A
     negative gap (rare) means the model is confused by irrelevant
     flips more than it is sensitive to relevant ones -- a red flag.

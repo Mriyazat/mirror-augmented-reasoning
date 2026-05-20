@@ -67,7 +67,7 @@ ARTIFACTS: list[tuple[str, str, str]] = [
     ("Report", "outputs/audit/a6_signatures_report.md",          "A6 signatures audit"),
     ("Report", "outputs/audit/a7_mor_report.md",                 "A7 MOR retrieval validation"),
     ("Report", "outputs/audit/a8_splits_report.md",              "A8 splits + leakage audit"),
-    ("Report", "outputs/audit/a8_xgboost_report.md",             "A8.2 XGBoost baseline"),
+    ("Report", "outputs/audit/a8_xgboost_report.md",             "XGBoost baseline XGBoost baseline"),
     ("Report", "outputs/audit/drug_completeness_report.md",      "drug-level completeness audit"),
 ]
 

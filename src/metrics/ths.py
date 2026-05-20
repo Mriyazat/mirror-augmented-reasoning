@@ -5,7 +5,7 @@ A prediction that gets the family right but the subtype wrong is strictly
 better than one that gets the family wrong, and flat macro-F1 hides this.
 THS assigns partial credit at each level.
 
-Per-pair score (default weights from plan §8):
+Per-pair score (default weights from the metric specification):
     1.0   full match: family AND subtype AND direction
     0.7   subtype match (family implied correct; direction may be wrong)
     0.3   family-only match (family correct; subtype wrong)
@@ -21,7 +21,7 @@ Direction scoring:
   is the same.  Polarity (up / down / risk / risk_down) must also match.
 
 Drop reason always = None.  We assume labels are pre-filtered (no 'Other'
-in V4 labels_hierarchical.parquet).
+in the labels_hierarchical.parquet).
 """
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Iterable
 
-# Partial-credit weights (plan §8). All pairs sum interpretation: mean over
+# Partial-credit weights . All pairs sum interpretation: mean over
 # pairs of the max-level achieved.
 W_FAMILY_ONLY = 0.3
 W_SUBTYPE = 0.7   # subtype correct (implies family correct)

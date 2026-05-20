@@ -1,4 +1,4 @@
-"""B5-v2 -- Cross-teacher consensus merge for V4.
+"""B5-v2 -- Cross-teacher cross-teacher consensus merge.
 
 The original `src/teacher/merge.py` collapses winners across the three
 teacher critic files by `pair_id`, keeping the highest critic score and
@@ -42,8 +42,8 @@ ORM head with healthy spread — it is the score we now use everywhere.
 The `--min_score` default has dropped accordingly (final_plus is unitless
 but is calibrated against critical_passed, not raw step soundness).
 
-Why this matters for V4:
-  - V3's "correct reasoning, wrong class" failure looks like exactly the
+Why this matters:
+  - the "correct reasoning, wrong class" failure mode looks like exactly the
     case where 2/3 teachers agree on the right family but the gold subtype
     sits in the long tail. Consensus weighting boosts those examples
     *without* dropping the third teacher's signal.

@@ -1,7 +1,7 @@
-"""CSA -- Cross-Symmetry Agreement (novelty pillar P4, complements MPS).
+"""CSA -- Cross-Symmetry Agreement (, complements MPS).
 
-Definition (plan §8)
---------------------
+Definition
+----------
     CSA = P(correct | order (A, B))  AND  correct | order (B, A)
 
     i.e. the joint probability that the model predicts the gold family
@@ -26,7 +26,7 @@ Observed CSA vs the product baseline tells us whether errors are
 ordering-correlated:
     CSA > product  -> model is symmetric; getting ab right helps ba.
     CSA = product  -> orderings are independent.
-    CSA < product  -> order-dependent failures (V3 pattern -- hidden
+    CSA < product  -> order-dependent failures (a known failure pattern -- hidden
                        in flat accuracy tables until CSA exposes them).
 
 Design

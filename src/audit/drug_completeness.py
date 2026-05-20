@@ -123,7 +123,7 @@ def main() -> None:
         f"- Drugs appearing in ≥1 DDI pair: **{n_in_pairs:,}** "
         f"({100*n_in_pairs/n_drugs:.1f}%)  ← the population that matters",
         f"- Drugs *not* appearing in any pair (lonely): **{n_drugs - n_in_pairs:,}** "
-        f"(mostly brand-new / biotech / OTC drugs without documented DDIs — irrelevant for V4)",
+        f"(mostly brand-new / biotech / OTC drugs without documented DDIs — irrelevant for the current pipeline)",
         "",
         "## Coverage on the pair-participating population",
         "",

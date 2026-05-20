@@ -29,7 +29,7 @@ from src.teacher.schema import EXAMPLE_JSON_SKELETON, load_rubric
 # ---------------------------------------------------------------------------
 # Prompt versioning (bump on any user-visible change to the prompt wording)
 # ---------------------------------------------------------------------------
-PROMPT_VERSION = "v4.3.1"
+PROMPT_VERSION = "1.0"
 
 FAMILY_DEFINITIONS = """\
 family definitions (you must pick exactly one for `final_answer.family`):
@@ -130,7 +130,7 @@ Output format — a single JSON object with two keys (`steps` and `final_answer`
 {EXAMPLE_JSON_SKELETON}
 ```
 
-STEP ROLE VOCABULARY (v4.3.1 — fixed set; each step's `role` MUST be chosen from this list):
+STEP ROLE VOCABULARY ( fixed set; each step's `role` MUST be chosen from this list):
   Evidence-pool inspection:
     • `pathway`             — cite pathway annotations (shared or per-drug).
     • `protein`             — cite protein targets (shared or per-drug).

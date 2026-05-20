@@ -12,7 +12,7 @@ Outputs (DDI/outputs/audit/):
   a07_severity_coverage.json      # coverage + confusion-style stats
   a07_report.md                   # human readable
 
-Severity is **metadata-only** for V4 — used for stratified evaluation, never a
+Severity is **metadata-only** — used for stratified evaluation, never a
 prediction target.
 """
 from __future__ import annotations
@@ -108,7 +108,7 @@ def build_name_to_dbid() -> dict[str, str]:
 
 
 def load_a06_pairs() -> set[tuple[str, str]]:
-    """Load A0.6 canonical pair set (DrugBank IDs)."""
+    """Load pair construction canonical pair set (DrugBank IDs)."""
     pairs: set[tuple[str, str]] = set()
     with A06_PAIRS.open() as fh:
         for line in fh:
@@ -121,7 +121,7 @@ def load_a06_pairs() -> set[tuple[str, str]]:
 def main() -> None:
     assert DRUGBANK_XML.exists(), f"missing {DRUGBANK_XML}"
     assert DDINTER_DIR.exists(), f"missing {DDINTER_DIR}"
-    assert A06_PAIRS.exists(), f"A0.6 outputs missing at {A06_PAIRS}"
+    assert A06_PAIRS.exists(), f"pair construction outputs missing at {A06_PAIRS}"
 
     # --- Step 1: unify DDInter ---
     print("[audit] loading DDInter 2.0 CSVs ...", flush=True)
@@ -141,7 +141,7 @@ def main() -> None:
 
     # --- Step 3: match ---
     drugbank_pairs = load_a06_pairs()
-    print(f"[audit] {len(drugbank_pairs)} DrugBank canonical pairs loaded from A0.6", flush=True)
+    print(f"[audit] {len(drugbank_pairs)} DrugBank canonical pairs loaded from pair construction", flush=True)
 
     matched = 0
     unmatched_a = 0  # drug_a not in DrugBank name map
@@ -224,7 +224,7 @@ def main() -> None:
         u = severity_by_match["unmatched_drugbank"].get(lvl, 0)
         md.append(f"| {lvl} | {m:,} | {u:,} |")
     md.append("\n## Decision\n")
-    md.append("- **DDInter severity is metadata only** for V4. Attached to each DrugBank pair "
+    md.append("- **DDInter severity is metadata only**. Attached to each DrugBank pair "
               "when available. Used at **evaluation time** to compute severity-stratified metrics "
               "(Major pairs are high-stakes — abstention utility should be higher there).")
     md.append("- **We do not predict severity.** Our prediction target is the mechanism/label.")

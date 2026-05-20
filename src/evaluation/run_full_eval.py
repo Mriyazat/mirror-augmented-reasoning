@@ -1,4 +1,4 @@
-"""Phase E -- End-to-end evaluation harness.
+"""evaluation -- End-to-end evaluation harness.
 
 One command, every metric, any split.
 
@@ -49,11 +49,11 @@ Outputs
 
 Design notes
 ------------
-1.  **V3 and baseline adapters.**  The harness expects the V4 trace schema.
-    To evaluate V3 traces or baseline outputs (OpenDDI / zero-shot), a
-    thin adapter (`_adapt_*` helpers) normalizes them into the V4
+1.  **Legacy and baseline adapters.**  The harness expects the current trace schema.
+    To evaluate legacy traces or baseline outputs (OpenDDI / zero-shot), a
+    thin adapter (`_adapt_*` helpers) normalizes them into the canonical
     record shape before scoring.  This lets the same eval command
-    produce apples-to-apples V3 vs V4 numbers.
+    produce apples-to-apples legacy-vs-current numbers.
 
 2.  **HR vocab auto-loaded.**  If `--known_entities_file` is omitted,
     we call `src.metrics.hr.load_known_entities()` to pull from the
@@ -65,14 +65,14 @@ Design notes
 
 Usage
 -----
-    # Evaluate V4 student predictions on subset25k test set:
+    # Evaluate student predictions on subset25k test set:
     python -m src.evaluation.run_full_eval \
         --predictions outputs/student/ddi_v4_sft/predictions_test.jsonl \
         --labels      data_processed/labels_hierarchical.parquet \
         --split       subset25k \
         --run_name    v4_student_subset25k
 
-    # Same harness, V3 comparison:
+    # Same harness, legacy comparison:
     python -m src.evaluation.run_full_eval \
         --predictions outputs/results/v3_baseline/v3_traces_adapted.jsonl \
         --labels      data_processed/labels_hierarchical.parquet \
@@ -212,17 +212,17 @@ def _load_split_pair_ids(split_manifest: str | Path, split_section: str) -> set[
 
 
 # ======================================================================
-# Trace adapters (V3 / baseline -> V4 canonical shape)
+# Trace adapters (legacy / baseline -> current canonical shape)
 # ======================================================================
 def _adapt_v3_trace(v3_rec: dict) -> dict:
-    """Adapt a V3 trace record into the V4 evaluator shape.
+    """Adapt a legacy trace record into the current evaluator shape.
 
-    V3 records from CoT_DDI had free-form prose rationales and a
-    separate `pred_label` field.  We synthesize a minimal V4 trace:
+    Legacy records from earlier CoT-style DDI work had free-form prose rationales and a
+    separate `pred_label` field.  We synthesize a minimal canonical trace:
       - Single-step trace with role="mechanism_of_action"
-      - final_answer populated from the V3 prediction
-      - context_ids empty (V3 didn't emit them)
-    This lets MFS / HR / RPC still score V3 outputs, albeit with
+      - final_answer populated from the legacy prediction
+      - context_ids empty (legacy records didn't emit them)
+    This lets MFS / HR / RPC still score legacy outputs, albeit with
     weaker signal (no evidence IDs to resolve against).
     """
     return {
@@ -456,7 +456,7 @@ def _ris_inputs(preds: list[dict], labels: dict[str, dict]) -> list[RisRecord]:
 # ======================================================================
 def _write_markdown(report: dict, out_md: Path) -> None:
     lines: list[str] = []
-    lines.append(f"# DDI V4 evaluation -- {report['run_name']}\n")
+    lines.append(f"# DDI Verifier evaluation -- {report['run_name']}\n")
     lines.append(f"- Predictions: `{report['predictions_path']}`")
     lines.append(f"- Labels:      `{report['labels_path']}`")
     lines.append(f"- Split:       `{report.get('split', 'all')}`")

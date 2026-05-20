@@ -71,7 +71,7 @@ efficacy changes into AdverseRisk unless the evidence explicitly supports a
 clinical adverse risk label.""",
     "axis_ambiguity_same_subtype": """\
 This pair is being regenerated because the subtype/clinical phenomenon is
-similar but the family axis was confused. Follow the V4 family definitions
+similar but the family axis was confused. Follow the the family definitions
 strictly: choose PK_* for pharmacokinetic mechanisms, PD_Activity for additive
 or antagonistic pharmacodynamic activity, Efficacy for therapeutic efficacy,
 and AdverseRisk only when the primary label is increased adverse-event risk.
@@ -118,7 +118,7 @@ def _append_gold_hint(base: str, row: dict[str, Any]) -> str:
     """
     return (
         base.strip()
-        + "\n\nFor this targeted repair example, the intended V4 label is: "
+        + "\n\nFor this targeted repair example, the intended target label is: "
         + f"family={row['gold_family']}, subtype={row['gold_subtype']}, "
         + f"direction_tag={row['gold_direction']}. Produce evidence-grounded "
         + "reasoning that justifies this label; if the evidence cannot justify "
@@ -134,7 +134,7 @@ def main() -> None:
                    help="Comma-separated cluster names. Default: core Phase 4.2 clusters.")
     p.add_argument("--max_per_cluster", type=int, default=-1)
     p.add_argument("--include_gold_hint", action="store_true",
-                   help="Append intended V4 label to guidance. Recommended for hard-negative repair.")
+                   help="Append intended target label to guidance. Recommended for hard-negative repair.")
     p.add_argument("--split_name", default="phase4_targeted")
     args = p.parse_args()
 

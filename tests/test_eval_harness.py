@@ -1,4 +1,4 @@
-"""End-to-end smoke test for the evaluation harness.
+"""End-to-end test for the evaluation harness.
 
 Synthesizes a tiny predictions JSONL + labels parquet and invokes the
 harness via subprocess.  Confirms the headline metrics file is produced
@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def _mk_trace(family: str, subtype: str, direction: str, evidence_ids: list[str] | None = None,
               abstain: bool = False, confidence: float | None = 0.8) -> dict:
-    """Minimal V4 trace + final_prediction pair."""
+    """Minimal canonical trace + final_prediction pair."""
     eids = evidence_ids or []
     trace = {
         "steps": [{

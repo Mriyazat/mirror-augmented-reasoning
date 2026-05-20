@@ -1,8 +1,8 @@
-"""Generate V4-format predictions from a Phase C SFT/DPO adapter.
+"""Generate canonical-format predictions from a Phase C SFT/DPO adapter.
 
 Consumes a teacher-schema JSONL (same format as Phase C train/val: each
 record carries `messages` with a system + user turn -- the assistant
-turn is what the student produces), and writes a V4 predictions JSONL
+turn is what the student produces), and writes a predictions JSONL
 that `src.evaluation.run_full_eval` can score end-to-end.
 
 Record schema (out)
@@ -157,7 +157,7 @@ def _extract_json(text: str) -> tuple[dict | None, str | None]:
 
 # ---------------------------------------------------------- trace post-process
 def _normalize_trace(parsed: dict, input_record: dict) -> dict:
-    """Pull parsed JSON into the V4 trace + final_prediction shape expected
+    """Pull parsed JSON into the the canonical trace + final_prediction shape expected
     by src.evaluation.run_full_eval. Missing/malformed fields get safe
     defaults so the record still reaches the metrics.
     """
@@ -184,7 +184,7 @@ def _normalize_trace(parsed: dict, input_record: dict) -> dict:
     }
 
 
-# The V4 teacher context template (src/teacher/prompt.py :: render_user)
+# The the teacher context template (src/teacher/prompt.py :: render_user)
 # emits a QUERY PAIR block of exactly two lines:
 #     "  A = {name}  ({db_id})  ATC={atc}  MW={mw}  t_half={hl}"
 #     "  B = {name}  ({db_id})  ATC={atc}  MW={mw}  t_half={hl}"
@@ -235,7 +235,7 @@ def _mirror_user_content(content: str, pair_id: str) -> tuple[str, bool, dict]:
          `  B=<b_name>(:| protein-bullet | ...)` prefix lines -> `  B=<a_name>...`
          (covers Active PK flags, Per-drug pathways, Per-drug proteins)
       4. Literal pair_id "DB_a|DB_b" occurrences (belts & suspenders; the
-         V4 template does not actually emit it inside the user prompt)
+         the template does not actually emit it inside the user prompt)
 
     Symmetric sections that are left untouched:
       - Header labels `[Drug A ...]` / `[Drug B ...]` (keep positional meaning)
@@ -415,7 +415,7 @@ def main():
     p.add_argument("--input", required=True,
                    help="Input JSONL with teacher-style `messages`.")
     p.add_argument("--output", required=True,
-                   help="Output JSONL in V4 predictions format.")
+                   help="Output JSONL in the canonical predictions format.")
     p.add_argument("--max_new_tokens", type=int, default=768)
     p.add_argument("--batch", type=int, default=4)
     p.add_argument("--limit", type=int, default=0,

@@ -1,12 +1,12 @@
-"""Phase C3 -- Mirror-DPO / IPO with PRM-weighted preferences.
+"""Mirror-DPO / IPO with PRM-weighted preferences.
 
 Background
 ----------
-V3 of this project burned a dataset for mirror-direction errors: 51 %
-of errors were attributable to the model copying the direction_tag
-across (A, B) and (B, A) rather than flipping it.  SFT alone does not
-solve this -- the symmetry loss in `sft_train.py` helps, but mirror
-errors are still too common in V3-scale experiments.
+Distilled DDI students exhibit a characteristic failure mode in which a
+large fraction of their errors are attributable to copying the
+direction_tag across the (A, B) and (B, A) orderings instead of flipping
+it. SFT alone does not fully resolve this -- the symmetry-KL loss in
+`sft_train.py` reduces the gap but residual mirror errors remain.
 
 The fix: **Mirror-DPO** (or IPO, which is more robust to noisy
 preferences).  We construct preference pairs where

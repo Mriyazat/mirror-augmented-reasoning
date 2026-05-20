@@ -10,7 +10,7 @@ repair idea to Phase-3 *training* records only:
   - prioritizes rare/ambiguous families and low-consensus records;
   - emits a manifest + per-pair guidance JSONL for teacher regeneration.
 
-The guidance intentionally includes the intended V4 label because this is a
+The guidance intentionally includes the intended target label because this is a
 supervised hard-repair corpus, not blind synthetic self-distillation.
 """
 from __future__ import annotations
@@ -147,7 +147,7 @@ def _guidance_for(rec: dict[str, Any]) -> str:
     base = GUIDANCE_BY_FAMILY.get(fam, "").strip()
     return (
         base
-        + "\n\nFor this supervised repair example, the intended V4 label is: "
+        + "\n\nFor this supervised repair example, the intended target label is: "
         + f"family={rec.get('family')}, subtype={rec.get('subtype')}, "
         + f"direction_tag={rec.get('direction_tag')}. Produce evidence-grounded "
         + "reasoning that justifies this label; if the evidence cannot justify "

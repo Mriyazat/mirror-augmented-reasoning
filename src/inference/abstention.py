@@ -1,9 +1,9 @@
 """Phase D -- Abstention with calibration guarantees.
 
-Why abstention is a core V4 contribution
+Why abstention is a core core contribution
 ----------------------------------------
-V3 had no honest "I don't know" signal.  When prompted outside the
-training distribution the model would fabricate confidence.  The V4
+Earlier baselines had no honest "I don't know" signal.  When prompted outside the
+training distribution the model would fabricate confidence.  The the current pipeline
 abstention pipeline composes three independent signals:
 
   1. **Split-conformal coverage** (Romano et al., 2019).  Guarantees
@@ -20,11 +20,11 @@ abstention pipeline composes three independent signals:
   3. **Self-calibration via PRM**.  If PRM scores the final
      conclusion step below a threshold, abstain regardless of what
      the classifier head claims.  This catches the "fluent but
-     unsupported" failure mode that fooled V3's zero-shot baseline.
+     unsupported" failure mode that fooled the earlier baseline's zero-shot baseline.
 
 Any one of these signals can trigger abstention.  The final abstention
 decision is an OR over the three predicates.  This is conservative on
-purpose -- V4 optimizes for Abstention Utility
+purpose -- the current pipeline optimizes for Abstention Utility
 (`src/metrics/au.py`), not raw coverage.
 
 Calibration targets (plan ch.8)
@@ -360,7 +360,7 @@ def apply(records: Iterable[PredictionRecord],
 # JSONL IO helpers (used by eval harness integration)
 # ======================================================================
 def load_predictions_jsonl(path: str | Path) -> list[PredictionRecord]:
-    """Load a V4 predictions.jsonl into PredictionRecord objects."""
+    """Load a predictions.jsonl into PredictionRecord objects."""
     out: list[PredictionRecord] = []
     with open(path) as f:
         for line in f:

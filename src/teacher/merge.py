@@ -26,13 +26,13 @@ The SFT record schema:
     "n_candidates":     int
   }
 
-Tier-based SFT weighting (the v4.3 near-miss preservation fix):
+Tier-based SFT weighting (near-miss preservation fix):
   - full_correct   → weight 1.00   (subtype exact, all critical gates pass)
   - family_correct → weight 0.50   (family+direction right, subtype in whitelist)
   - near_miss      → weight 0.25   (family right, subtype in whitelist, but
                                      direction or polarity soft-fails)
 
-This addresses V3's "correct reasoning, wrong class (out of 129)" failure:
+This addresses the "correct reasoning, wrong class" failure mode:
 the student gets exposed to teachers with correct mechanistic reasoning
 even when the exact subtype disagrees with the DrugBank label.
 
@@ -65,7 +65,7 @@ ROOT = Path(__file__).resolve().parents[2]
 #   near_miss (0.25): family right but direction/polarity wrong (structural issue)
 #   abstention (0.33): honest uncertainty with intact schema + grounded evidence.
 #     Slightly above near_miss because abstention teaches calibrated uncertainty
-#     (core V4 goal), slightly below family_correct because the density of
+#     (core goal), slightly below family_correct because the density of
 #     training signal per token is lower than a confident correct answer.
 TIER_WEIGHTS = {
     "full_correct":   1.00,
@@ -80,10 +80,10 @@ def merge(critic_paths: list[Path], split: str, out_path: Path,
           keep_near_miss: bool = True):
     """Merge critic winners into teacher_clean with tier-based weighting.
 
-    keep_near_miss=True (the v4.3 default) preserves family_correct and
+    keep_near_miss=True (default) preserves family_correct and
     near_miss tiers with down-weighted sample weights so Phase C student
     SFT can still learn from traces with good reasoning but imperfect
-    subtype/direction. Set False for the V3-style strict-only path.
+    subtype/direction. Set False for the the strict-only path.
     """
     cb = ContextBuilder(neighbor_index_path=DATA / f"neighbor_index_{split}.parquet")
 
@@ -228,7 +228,7 @@ def merge(critic_paths: list[Path], split: str, out_path: Path,
                     f.write(json.dumps({"pair_id": pid,
                                         "mirror_pair_ids": [q for q in pids if q != pid]}) + "\n")
                 n_with_mirror += len(pids)
-    print(f"[merge] mirror-pair sidecar: {n_with_mirror:,} records (P4)")
+    print(f"[merge] mirror-pair sidecar: {n_with_mirror:,} records ")
 
 
 if __name__ == "__main__":
@@ -241,7 +241,7 @@ if __name__ == "__main__":
     p.add_argument("--no_strict", dest="require_strict", action="store_false",
                    help="Accept tiers below full_correct (family_correct, near_miss). "
                         "Default: strict (full_correct only). Recommended: pass this "
-                        "flag with --keep_near_miss for the v4.3 tier-weighted path.")
+                        "flag with --keep_near_miss for the tier-weighted path.")
     p.add_argument("--no_near_miss", dest="keep_near_miss", action="store_false",
                    help="Exclude near_miss tier even with --no_strict")
     p.set_defaults(require_strict=True, keep_near_miss=True)

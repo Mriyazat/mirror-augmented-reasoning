@@ -1,4 +1,4 @@
-"""Augment a V4 predictions JSONL with gold labels joined from
+"""Augment a predictions JSONL with gold labels joined from
 `data_processed/labels_hierarchical.parquet`, and (optionally) attach
 per-pair retrieval `context_ids` needed by MFS / HR / RIS.
 

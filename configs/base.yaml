@@ -1,11 +1,16 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# DDI V4 — Base configuration (all phases inherit, override per-phase)
+# DDI Verifier — Base configuration
+#
+# All phases inherit from this file and may override individual entries.
+# `project.root` defaults to the current working directory; set the
+# DDI_ROOT environment variable to point to a different repository root.
+# All `paths.*` entries are resolved relative to `project.root` unless they
+# are absolute.
 # ─────────────────────────────────────────────────────────────────────────────
 
 project:
-  name: ddi_v4
-  target_venue: EMNLP 2026 (ARR)
-  root: .  # repo root; override via env or per-phase config on cluster
+  name: ddi_verifier
+  root: ${DDI_ROOT:-.}     # repository root (override via DDI_ROOT env var)
   seed: 42
 
 # === Data paths (all under project.root) ===
@@ -33,17 +38,17 @@ data_sources:
     expected_pairs: 160235
     severity_coverage_drugbank_pct: 6.26
   kegg_smpdb:
-    dir: data_raw/pathways  # created in A4
+    dir: data_raw/pathways  # created during data preparation
     enabled: true
 
-# === Label taxonomy (Phase A5) ===
+# === Label taxonomy (Phase A (taxonomy) ===
 taxonomy:
   max_families: 20
   max_subtypes: 100
   collapse_forbidden: true  # NO "other" bucket — force every label into a family
   directionality: true
 
-# === Splits (Phase A8; matches A0.8 protocol) ===
+# === Splits (Phase A (splits); matches the split-construction protocol) ===
 splits:
   random_full: {train: 0.80, val: 0.10, test: 0.10}
   drug_cold:   {train: 0.80, val: 0.10, test: 0.10}   # on 19,853 drugs
@@ -69,7 +74,7 @@ models:
     candidates_per_pair: 5
     decoding: {temperature: 0.7, top_p: 0.9, max_tokens: 1024}
   prm_base:
-    hf_id: eth-medical-ai-lab/Med-PRM-7B  # from external/Med-PRM
+    hf_id: eth-medical-ai-lab/Med-PRM-7B
     lora_r: 32
     lora_alpha: 64
   judges:
@@ -77,17 +82,17 @@ models:
     txgemma_27b:  google/txgemma-27b-chat
     qwen_72b:     Qwen/Qwen2.5-72B-Instruct
     meditron_70b: epfl-llm/meditron-70b
-  frontier_judges:  # only for D9
+  frontier_judges:  #
     gpt5:            gpt-5
     gemini_2_5_pro:  gemini-2.5-pro
     claude_opus_4:   claude-opus-4
 
-# === Retrieval (Phase A6, P2) ===
+# === Retrieval (Phase A (retrieval), P2) ===
 retrieval:
   method: pathway_signature_jaccard
   granularities: [pathway_id, pathway_family, shared_target]
   top_k: 8
-  mor_floor: 0.55   # MOR validation gate in A7
+  mor_floor: 0.55   # MOR validation gate during the retrieval audit
 
 # === Training (Phase C) ===
 training:
@@ -107,13 +112,13 @@ training:
     dropout: 0.1
     temperature_init: 1.0
 
-# === Abstention (Phase C6, P7) ===
+# === Abstention (Phase C, P7) ===
 abstention:
   method: conformal_plus_entropy
   target_coverage: 0.90
   calibration_size: 2500
 
-# === Metrics thresholds (Phase C8 GO/NO-GO + §11 success criteria) ===
+# === Metrics thresholds (Phase C GO/NO-GO + success criteria) ===
 metrics:
   go_no_go:
     macro_f1_vs_xgb_min: 3.0

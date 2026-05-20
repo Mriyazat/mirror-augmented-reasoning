@@ -1,4 +1,4 @@
-"""A8.2 — XGBoost family-classification baseline on the three canonical splits.
+"""XGBoost baseline — XGBoost family-classification baseline on the three canonical splits.
 
 Purpose (sanity gate): validate that our drug_cold / pair_cold splits really
 lose information relative to random_full — i.e. no leakage. We expect a
@@ -21,9 +21,28 @@ For each split:
   3. Compute macro-F1 + per-family F1 on test.
   4. Write metrics to outputs/audit/a8_xgb_<split>.json
 Final audit report: outputs/audit/a8_xgboost_report.md
+
+Optional CLI for fair LLM↔baseline comparison
+---------------------------------------------
+By default the script runs all three canonical splits on their full
+test partitions. To compare against the LLM run on a stratified subset
+(the same 5K manifest the student saw), pass the matching args:
+
+    python -m src.evaluation.baseline_xgboost \
+        --split random_full \
+        --split_section test \
+        --manifest_jsonl outputs/eval_prompts/random_full_test_5000_stratified.manifest.jsonl \
+        --run_name xgboost_random_full_test_5000_stratified
+
+`--manifest_jsonl` filters the test partition to exactly the pair_ids
+in the manifest (one JSON record per line, each with `pair_id`).
+Training is **always** done on the full train partition — only test
+evaluation is filtered. `--split` restricts the run to that one split
+instead of all three.
 """
 from __future__ import annotations
 
+import argparse
 import json
 import time
 from pathlib import Path
@@ -132,16 +151,93 @@ def build_sparse_matrix(pairs: list[dict], fp_matrix: csr_matrix,
     return hstack([fp_a, fp_b, scalars_sp], format="csr")
 
 
+def _load_manifest_pids(path: Path) -> set[str]:
+    """Read a JSONL manifest and return the set of pair_ids it references."""
+    pids: set[str] = set()
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            pid = rec.get("pair_id")
+            if pid:
+                pids.add(pid)
+    return pids
+
+
+def _maybe_write_xgb_preds(predictions_out: Path | None, test_pids: list[str],
+                            pred: np.ndarray, prob: np.ndarray, fam2idx: dict):
+    """Emit per-pair predictions in run_full_eval-compatible JSONL."""
+    if predictions_out is None:
+        return
+    predictions_out.parent.mkdir(parents=True, exist_ok=True)
+    idx2fam = {i: f for f, i in fam2idx.items()}
+    with predictions_out.open("w") as fout:
+        for i, pid in enumerate(test_pids):
+            fam = idx2fam[int(pred[i])]
+            conf = float(prob[i, int(pred[i])])
+            rec = {
+                "pair_id":     pid,
+                "input_order": "ab",
+                "final_prediction": {
+                    "family":        fam,
+                    "subtype":       None,
+                    "direction_tag": None,
+                    "abstain":       False,
+                    "confidence":    conf,
+                    "label_dist":    {idx2fam[j]: float(prob[i, j])
+                                       for j in range(prob.shape[1])},
+                    "aggregator":    "xgboost",
+                },
+            }
+            fout.write(json.dumps(rec) + "\n")
+    print(f"[A8-xgb]   per-pair predictions -> {predictions_out}")
+
+
 def run_split(split_name: str, fp_matrix, id_to_idx, pair_index_rows, sig_index, fam2idx,
-              truth_by_pid: dict) -> dict:
+              truth_by_pid: dict,
+              manifest_subset: set[str] | None = None,
+              section_filter: str | None = None,
+              run_name: str | None = None,
+              predictions_out: Path | None = None) -> dict:
     from src.metrics.ths import score_family_only
-    print(f"\n[A8-xgb] ==== {split_name} ====", flush=True)
+    print(f"\n[A8-xgb] ==== {split_name}{' / ' + run_name if run_name else ''} ====",
+          flush=True)
     manifest = pq.read_table(SPLITS_DIR / f"manifest_{split_name}.parquet").to_pylist()
     y_all = {r["pair_id"]: fam2idx[r["family"]] for r in manifest}
 
     train_pids = [r["pair_id"] for r in manifest if r["split"] == "train"]
     val_pids   = [r["pair_id"] for r in manifest if r["split"] == "val"]
     test_pids  = [r["pair_id"] for r in manifest if r["split"] == "test"]
+
+    if manifest_subset is not None:
+        # Filter the relevant section to exactly the manifest's pair_ids.
+        # Training stays on the full train partition (so the model is the
+        # same one a 5K stratified eval should be compared against).
+        sec = (section_filter or "test").lower()
+        if sec == "test":
+            kept = [pid for pid in test_pids if pid in manifest_subset]
+            if not kept:
+                raise ValueError(
+                    f"manifest had {len(manifest_subset)} pair_ids but none "
+                    f"were in {split_name}.test ({len(test_pids)} pairs)."
+                )
+            print(f"[A8-xgb]   manifest filter on test: "
+                  f"{len(test_pids):,} -> {len(kept):,}", flush=True)
+            test_pids = kept
+        elif sec == "val":
+            kept = [pid for pid in val_pids if pid in manifest_subset]
+            print(f"[A8-xgb]   manifest filter on val: "
+                  f"{len(val_pids):,} -> {len(kept):,}", flush=True)
+            val_pids = kept
+        else:
+            print(f"[A8-xgb]   WARN: unknown --split_section {section_filter!r}, "
+                  f"ignoring manifest filter.", flush=True)
+
     print(f"[A8-xgb]   sizes: train={len(train_pids):,}  val={len(val_pids):,}  "
           f"test={len(test_pids):,}", flush=True)
 
@@ -174,6 +270,8 @@ def run_split(split_name: str, fp_matrix, id_to_idx, pair_index_rows, sig_index,
     prob = bst.predict(dtest, iteration_range=(0, bst.best_iteration + 1))
     pred = np.argmax(prob, axis=1)
 
+    _maybe_write_xgb_preds(predictions_out, test_pids, pred, prob, fam2idx)
+
     macro_f1 = f1_score(y_te, pred, average="macro")
     micro_f1 = f1_score(y_te, pred, average="micro")
     weighted_f1 = f1_score(y_te, pred, average="weighted")
@@ -193,6 +291,9 @@ def run_split(split_name: str, fp_matrix, id_to_idx, pair_index_rows, sig_index,
 
     out = {
         "split": split_name,
+        "run_name": run_name,
+        "manifest_filtered": manifest_subset is not None,
+        "section_filter": section_filter,
         "train_size": int(len(train_pids)),
         "val_size": int(len(val_pids)),
         "test_size": int(len(test_pids)),
@@ -212,13 +313,39 @@ def run_split(split_name: str, fp_matrix, id_to_idx, pair_index_rows, sig_index,
             "note": ths_stats.get("note", ""),
         },
     }
-    (AUDIT_DIR / f"a8_xgb_{split_name}.json").write_text(json.dumps(out, indent=2))
+    audit_name = (
+        f"a8_xgb_{run_name}.json" if run_name
+        else f"a8_xgb_{split_name}.json"
+    )
+    (AUDIT_DIR / audit_name).write_text(json.dumps(out, indent=2))
     print(f"[A8-xgb]   macro_F1 = {macro_f1:.4f}, weighted = {weighted_f1:.4f}, "
           f"macro_THS(family-only) = {ths_stats['macro_ths']:.4f}  (cap 0.3)", flush=True)
     return out
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--split", default=None,
+                    choices=[None, "random_full", "drug_cold", "pair_cold"],
+                    help="Restrict run to this single split. Default: run all three.")
+    ap.add_argument("--split_section", default="test",
+                    choices=["test", "val"],
+                    help="Which section the manifest_jsonl filter applies to.")
+    ap.add_argument("--manifest_jsonl", default=None,
+                    help="JSONL manifest (one pair_id per line in a 'pair_id' "
+                         "field). When set, evaluation is restricted to those "
+                         "pair_ids; training stays on the full train partition.")
+    ap.add_argument("--run_name", default=None,
+                    help="Name for the audit output (a8_xgb_<run_name>.json). "
+                         "Defaults to the split name.")
+    ap.add_argument("--predictions_out", default=None,
+                    help="Optional path to write per-pair JSONL predictions "
+                         "(run_full_eval-compatible schema). When set with "
+                         "--split, the file holds only that split's test "
+                         "predictions; without --split, the path is treated "
+                         "as a template with {split} placeholder.")
+    args = ap.parse_args()
+
     print("[A8-xgb] loading pairs + signatures ...", flush=True)
     pairs_rows = pq.read_table(DATA / "pairs.parquet",
                                columns=["pair_id", "a_id", "b_id"]).to_pylist()
@@ -247,13 +374,46 @@ def main():
     # Pin num_class now that we know the family count
     XGB_PARAMS["num_class"] = len(fam2idx)
 
+    manifest_subset: set[str] | None = None
+    if args.manifest_jsonl:
+        manifest_subset = _load_manifest_pids(Path(args.manifest_jsonl))
+        print(f"[A8-xgb] manifest filter loaded: "
+              f"{len(manifest_subset):,} pair_ids from "
+              f"{args.manifest_jsonl}", flush=True)
+
+    splits_to_run = [args.split] if args.split else [
+        "random_full", "drug_cold", "pair_cold",
+    ]
     results = {}
-    for split in ("random_full", "drug_cold", "pair_cold"):
-        results[split] = run_split(split, fp_matrix, id_to_idx, pair_index_rows,
-                                    sig_index, fam2idx, truth_by_pid)
+    for split in splits_to_run:
+        pred_path: Path | None = None
+        if args.predictions_out:
+            tmpl = args.predictions_out
+            pred_path = Path(tmpl.format(split=split) if "{split}" in tmpl else tmpl)
+        results[split] = run_split(
+            split, fp_matrix, id_to_idx, pair_index_rows,
+            sig_index, fam2idx, truth_by_pid,
+            manifest_subset=manifest_subset if split == args.split else None,
+            section_filter=args.split_section,
+            run_name=args.run_name if split == args.split else None,
+            predictions_out=pred_path,
+        )
+
+    if len(results) == 1:
+        # Single-split mode (often used for the LLM↔baseline 5K compare).
+        # The legacy report below is only meaningful when all three splits
+        # ran; skip it here.
+        only = next(iter(results.values()))
+        print(f"[A8-xgb] single-split summary  split={args.split}  "
+              f"run_name={args.run_name}  "
+              f"macro_F1={only['macro_f1']:.4f}  "
+              f"weighted_F1={only['weighted_f1']:.4f}  "
+              f"macro_THS={only['ths']['macro_ths']:.4f}  "
+              f"(test_size={only['test_size']:,})")
+        return
 
     # Report markdown
-    md = ["# A8.2 — XGBoost baseline on V4 splits\n",
+    md = ["# XGBoost baseline — XGBoost baseline on the canonical splits\n",
           f"- Features: 2×2048 Morgan FP + 8 signature scalars = {2*FP_BITS + len(SCALAR_FEATURES)} dims",
           f"- Model: xgb {xgb.__version__}, tree_method=hist, max_depth={XGB_PARAMS['max_depth']}, "
           f"eta={XGB_PARAMS['eta']}, early_stop={EARLY_STOP}",

@@ -1,11 +1,11 @@
-"""A0.6 — Label co-occurrence audit on new DrugBank (2026-04).
+"""pair construction — Label co-occurrence audit on new DrugBank (2026-04).
 
 Goal: For every (drug_A, drug_B) pair appearing in <drug-interactions>, count
 how many DISTINCT interaction <description> strings are attached across the
 whole DrugBank. Also record per-description directionality (A->B vs B->A).
 
-Why: V3 assumed 1 pair -> 1 label. If DrugBank lists multiple descriptions per
-pair, V4 must define an explicit resolution policy (e.g., union of mechanisms,
+Why: Earlier work assumed 1 pair -> 1 label. If DrugBank lists multiple descriptions per
+pair, the pipeline must define an explicit resolution policy (e.g., union of mechanisms,
 canonical directionality, or multi-label).
 
 Outputs (DDI/outputs/audit/):
@@ -189,7 +189,7 @@ def main() -> None:
 
     # Markdown report
     md = []
-    md.append("# A0.6 — Label Co-occurrence Audit on DrugBank 2026-04\n")
+    md.append("# pair construction — Label Co-occurrence Audit on DrugBank 2026-04\n")
     md.append(f"- DrugBank file: `{XML}`")
     md.append(f"- Drugs parsed: **{n_drugs}**")
     md.append(f"- Total drug-interaction rows: **{n_interactions}**")
@@ -203,7 +203,7 @@ def main() -> None:
     md.append("|---:|---:|")
     for k, v in summary["pair_ndesc_distribution"].items():
         md.append(f"| {k} | {v} |")
-    md.append("\n## V4 Resolution Policy Options")
+    md.append("\n## Resolution Policy Options")
     md.append("Based on the counts above, we will decide in A0.10 pre-flight report:")
     md.append("1. **single-description** (drop pairs with conflicts) — simplest, lose coverage")
     md.append("2. **canonical-first** (pick primary DrugBank direction description) — matches biology of \"subject affects object\"")

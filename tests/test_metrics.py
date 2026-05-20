@@ -1,4 +1,4 @@
-"""Smoke tests for the Phase E metrics library.
+"""Unit tests for the evaluation metrics library.
 
 These run fast with synthetic fixtures so the metrics can be exercised
 before teacher traces land on disk.  Run with:

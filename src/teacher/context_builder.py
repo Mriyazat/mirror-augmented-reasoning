@@ -18,7 +18,7 @@ For each DDI pair (a, b), emits a `ContextBundle` containing:
   Metadata:
     - context_ids:  union of every ID a grounded claim could legally cite
                     (pathway IDs, uniprot IDs, DrugBank IDs of A/B and
-                    neighbors, ATC codes).  B2 QC uses this as the gold set
+                    neighbors, ATC codes).  QC uses this as the gold set
                     for the `evidence_grounded` dimension.
 
 Usage:

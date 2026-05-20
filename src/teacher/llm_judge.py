@@ -1,7 +1,7 @@
 """B2.5 — Out-of-family LLM-as-judge (4th judge layer).
 
-V3 hit a wall with 3 LLM-judges of the *same family* (all trained on
-similar web text, all sharing biases with the teacher).  V4 adds ONE
+Earlier work hit a wall with 3 LLM-judges of the *same family* (all trained on
+similar web text, all sharing biases with the teacher).  Our work adds ONE
 judge from a DIFFERENT model family (OpenAI GPT-4o or Anthropic Claude)
 run on a ~2k held-out sample.  It is a diagnostic, not a gate:
 

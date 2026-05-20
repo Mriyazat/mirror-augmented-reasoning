@@ -1,77 +1,31 @@
 # =============================================================================
-# DDI-PRM step-level reward rubric  (B0)
+# DDI-PRM step-level reward rubric
 # -----------------------------------------------------------------------------
 # Compatible with Med-PRM (EMNLP '25): each reasoning step ends with the
 # separator token " ки" and the PRM outputs " +" (step valid) or " -" (step
-# invalid) at that position.  This file defines:
+# invalid) at that position. This file defines:
 #
-#   1. Step schema the teacher must emit (B1b → B2 QC)
-#   2. Dimensions the PRM scores (B3 training target)
-#   3. How we auto-derive a gold +/- label for each step from Phase-A artifacts
-#      (labels_hierarchical.parquet + pair_signatures.parquet + drug tables)
-#      — no human annotation required for the large-scale PRM training set
-#   4. Step aggregation rules (B4 critic: refine / keep / drop)
+#   1. Step schema the teacher must emit
+#   2. Dimensions the PRM is trained to score
+#   3. How a gold +/- label is auto-derived for each step from Phase A
+#      artifacts (labels_hierarchical.parquet + pair_signatures.parquet +
+#      drug tables); no human annotation is required for the large-scale
+#      PRM training set.
+#   4. Step aggregation rules (refine / keep / drop)
 #
-# Design principle: every dimension below must be AUTO-VERIFIABLE against
-# ground truth in Phase A.  If we can't check a dimension programmatically,
-# it can't go into the PRM training signal.
+# Design principle: every dimension below must be auto-verifiable against
+# ground truth from Phase A. Dimensions that cannot be checked
+# programmatically are not included in the PRM training signal.
 # =============================================================================
 
-version: "v4.3.0"
-separator_token: " ки"        # Med-PRM convention (keep unchanged)
+version: "1.0"
+separator_token: " ки"        # Med-PRM convention (kept unchanged)
 reward_tokens:
   valid:  " +"
   invalid: " -"
 
-# ---- What changed in v4.2 (vs v4.1) ----
-#   - final_answer.summary   NEW: ≤ `summary_max_words` natural-language
-#                            recap so the student can be trained on a
-#                            compact answer path (V3's finding: long
-#                            reasoning → student drops the final answer).
-#   - max_tokens_per_step    tightened 80 → 60 to keep total trace length
-#                            under ~700 tokens (safe for 7B-8B student's
-#                            attention + max_new_tokens budget).
-#   - n_candidates_per_pair  5 → 10 (quality-first; compute is free).
-#   - teacher_models         NEW list: 3 different families for ensemble
-#                            diversity (Llama-3.3-70B, Qwen2.5-72B,
-#                            DeepSeek-R1-Distill-Llama-70B).
-#   - judge_llm              NEW: out-of-family LLM-as-judge
-#                            (GPT-4o / Claude-3.5-Sonnet) run on a 2k
-#                            validation sample to catch shared biases
-#                            between the three open-source teachers.
-#   - prm_base               dmis-lab/llama-3.1-medprm-reward-v1.0 (the
-#                            actual Med-PRM reward checkpoint from EMNLP '25;
-#                            already PRM-pretrained) replaces the plain
-#                            Llama-3.1-8B-Instruct as the default base.
-#
-# ---- What changed in v4.3 (vs v4.2) — literature-grounded revisions ----
-#   - summary_max_words      100 → 80 (soft), 120 (hard cap). Rationale:
-#                            Feng et al. 2024 ("Key Factors for Distilling
-#                            CoT", arxiv 2502.18001) show a 27.4% length
-#                            reduction yielded +11.29% student accuracy.
-#                            Clinical structured-abstract "key finding"
-#                            blocks converge to ~50–75 words. 80-word soft
-#                            cap matches this evidence.
-#   - G9 (NEW, soft)         HEDGING DETECTOR. SELFDOUBT (arxiv 2604.06389)
-#                            shows traces with ZERO hedging markers are
-#                            correct 96% of the time; hedging amplifies
-#                            in teacher→student. We block excessive
-#                            hedging in the summary unless abstain=true.
-#   - G10 (NEW, soft)        SUBTYPE-IN-FAMILY. Accepts "family correct,
-#                            subtype wrong but in the gold family's
-#                            whitelist" as a NEAR-MISS tier. Phase C
-#                            uses label smoothing on these. Directly
-#                            addresses V3's "correct reasoning, wrong
-#                            class out of 129" failure mode.
-#   - tier field in merge    Traces tagged {full_correct, family_correct,
-#                            near_miss} so Phase C student SFT can
-#                            weight them differently.
-#   - temperature diversity  Candidates use temps [0.3, 0.5, 0.7, 0.9, 1.0]
-#                            instead of all 0.8. Feng et al. finding:
-#                            diversity > teacher accuracy alone.
-
 # -----------------------------------------------------------------------------
-# Teacher step schema — B1b emits JSON; B2 parses & verifies
+# Teacher step schema
 # -----------------------------------------------------------------------------
 step_schema:
   required_fields:
@@ -93,20 +47,20 @@ final_answer_schema:
     - subtype
     - direction_tag
     - polarity
-    - confidence         # 0.0-1.0 float (used for abstention calibration in C6)
+    - confidence         # 0.0-1.0 float (used for abstention calibration)
     - abstain            # bool; if true the model is declining to predict
     - summary            # ≤ summary_max_words natural-language recap
                          # (see summary_constraints below)
 
 summary_constraints:
-  max_words: 80            # soft cap (G8) — evidence-based, see v4.3 notes
+  max_words: 80            # soft cap — evidence-based, see notes
   hard_max_words: 120      # hard cap (rejects trace outright)
-  must_mention:            # soft gate G8 in qc.py
+  must_mention:            # soft gate in qc.py
     - at_least_one_of_a_or_b_drug_name: true
   banned_phrases:          # re-uses BANNED_ABSTAIN_PHRASES from schema.py
-  # G9 hedging detector (SELFDOUBT, arxiv 2604.06389).
+  # Hedging detector (SELFDOUBT, arxiv 2604.06389).
   # We allow at most `max_hedge_density` hedging markers per 10 words
-  # of summary text. If abstain=true, G9 is bypassed.
+  # of summary text. If abstain=true, the hedging gate is bypassed.
   hedging_markers:
     - "may"
     - "might"
@@ -144,24 +98,24 @@ dimensions:
     auto_label:
       source: pair_signatures + drugs + pathways_unified + drug_proteins
       rule: "step is valid iff every evidence_id ∈ context_ids set for the pair"
-    v3_bug_mitigated:
-      - "HR (Hallucination Rate) in V3 — rationale entities not in DrugBank"
+    notes:
+      - "Mitigates hallucinated rationale entities not present in DrugBank."
 
   - name: direction_preserved
     critical: true
     description: >
       If the step's direction_tag is a_to_b or b_to_a, it must match the
-      gold direction from labels_hierarchical for this pair.  Bidirectional
+      gold direction from labels_hierarchical for this pair. Bidirectional
       steps must be on bidirectional pairs.
     auto_label:
       source: labels_hierarchical.parquet
       rule: |
-        bidirectional gold → step direction_tag ∈ {bidirectional, n/a}
-        directional gold   → step direction_tag must match
-                             (subject_drugbank_id → object_drugbank_id)
-    v3_bug_mitigated:
-      - "51.4% of Qwen2.5 errors were A→B vs B→A direction flip"
-      - "Mirror-pair confusion (MPS will catch this in C)"
+        bidirectional gold -> step direction_tag in {bidirectional, n/a}
+        directional gold   -> step direction_tag must match
+                              (subject_drugbank_id -> object_drugbank_id)
+    notes:
+      - "Targets the direction-flip failure mode in mirror-pair predictions."
+      - "Complements the MPS evaluation metric."
 
   - name: family_consistent
     critical: true
@@ -198,13 +152,13 @@ dimensions:
     description: >
       The step does not use silence-as-abstention phrasing ("I cannot",
       "insufficient information") without the final_answer.abstain=True
-      flag.  Abstention must be explicit in final_answer, not smuggled in
+      flag. Abstention must be explicit in final_answer, not smuggled in
       mid-chain.
-    v3_bug_mitigated:
-      - "V3 grounded_factuality.py:256-259 — 'silence rewards precision' bug"
+    notes:
+      - "Mitigates silence-rewards-precision: a hedged rationale paired with an arbitrary final family."
 
 # -----------------------------------------------------------------------------
-# Step aggregation (used by B4 PRM-guided critic)
+# Step aggregation (used by the PRM-guided critic)
 #
 # step_score ∈ [0,1]  (PRM softmax(+) prob, Med-PRM convention)
 # trace_score = aggregator(step_scores)
@@ -223,39 +177,37 @@ aggregation:
   acceptance_threshold: 0.80      # above this → accept unchanged
 
 # -----------------------------------------------------------------------------
-# Teacher generation constraints (B1b passes these to the prompt)
+# Teacher generation constraints (passed to the generation prompt)
 # -----------------------------------------------------------------------------
 teacher_generation:
-  # Quality-first (v4.3.1): 24 candidates × 3 teachers = 72 candidates per
-  # pair, PRM picks the best one.
+  # 24 candidates per teacher x 3 teacher families = 72 candidate traces
+  # per pair; the PRM selects the highest-scoring trace.
   #
-  # Why N=24 per teacher?
-  #   - Best-of-N saturation curve (quality gain ∝ log(N)):
-  #       * Med-PRM (EMNLP '25, arxiv 2506.11474) — medical QA + PRM — N=16
-  #       * Math-Shepherd (arxiv 2312.08935) — math + PRM — N=64
-  #       * Lightman et al. 2023 "Verify Step by Step" — hard math — N=1860
-  #   - Our task (7-family × ~147-subtype × direction × polarity DDI) is
-  #     harder than MedQA but structured, so we sit between Med-PRM and
-  #     Math-Shepherd. N=24 ≈ 1.5× Med-PRM for the harder taxonomy.
-  #   - 3 teacher families already provide inter-model diversity, so
-  #     per-teacher N=24 gives 72 total candidates/pair — dense enough
-  #     for the PRM to discriminate mechanistic reasoning quality.
-  #   - Returns to N=32 are small (+~0.5 pp vs +33% compute).
+  # Rationale for N=24 per teacher:
+  #   - Best-of-N saturation curve (quality gain ~ log N):
+  #       * Med-PRM (EMNLP '25, arxiv 2506.11474) — medical QA + PRM, N=16
+  #       * Math-Shepherd (arxiv 2312.08935) — math + PRM, N=64
+  #       * Lightman et al. 2023 "Verify Step by Step" — hard math, N=1860
+  #   - The DDI task (7 families x ~147 subtypes x direction x polarity)
+  #     is harder than MedQA but more structured than competition math, so
+  #     N=24 sits between Med-PRM and Math-Shepherd.
+  #   - Three teacher families already supply inter-model diversity, so
+  #     72 total candidates/pair is dense enough for the PRM to
+  #     discriminate mechanistic reasoning quality.
   n_candidates_per_pair: 24
-  temperature: 0.8                 # base/default; cycle below overrides
+  temperature: 0.8                 # default; the schedule below overrides
   top_p: 0.9
   max_steps: 8
   min_steps: 3
-  max_tokens_per_step: 60          # tightened from 80 → compact trace
+  max_tokens_per_step: 60
   min_tokens_per_step: 10
-  summary_max_words: 80            # evidence-based (v4.3)
-  summary_hard_max_words: 120      # hard cap
+  summary_max_words: 80
+  summary_hard_max_words: 120
   log_generation_config: true
-  # Temperature diversification across the 24 candidates. Feng et al. 2024
-  # (arxiv 2502.18001): diversity > teacher accuracy alone. Schedule covers
-  # [0.30, 1.00] with denser sampling in the "productive" 0.60-0.85 band.
-  # Each repeat is NOT identical — the generator passes a per-candidate
-  # seed (seed + idx*100 + ci) so every sample is an independent draw.
+  # Temperature diversification across the 24 candidates per teacher.
+  # Schedule covers [0.30, 1.00] with denser sampling in the [0.60, 0.85]
+  # band. Each candidate uses an independent per-candidate seed so the
+  # samples are independent draws.
   candidate_temperatures:
     - 0.30     # low-T: conservative, high-agreement answers
     - 0.40
@@ -282,7 +234,7 @@ teacher_generation:
     - 1.00
     - 0.60
 
-# Ensemble-of-teachers (P2 diversification). The generator iterates this
+# Ensemble-of-teachers (diversification). The generator iterates this
 # list and writes the teacher_id on every record.
 teacher_models:
   - id:   "llama-3.3-70b"
@@ -295,9 +247,9 @@ teacher_models:
     path: "deepseek-ai/DeepSeek-R1-Distill-Llama-70B"
     family: "deepseek"
 
-# Out-of-family LLM-as-judge (4th QC layer; see docs/phase_b_summary.md).
+# Out-of-family LLM-as-judge (used as an additional QC layer).
 # Runs on a ~2k held-out sample only; used for calibration diagnostics,
-# NOT as a hard gate on teacher_clean.
+# not as a hard gate on the cleaned teacher corpus.
 judge_llm:
   provider: "openai"              # or "anthropic"
   model:    "gpt-4o"              # out-of-family relative to llama/qwen/deepseek

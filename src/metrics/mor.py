@@ -92,11 +92,11 @@ def atc_prefix_depth_pair(a_codes: list[str], b_codes: list[str]) -> int:
 
 def main():
     t0 = time.time()
-    print("[A7] building drug features ...", flush=True)
+    print("[mor] building drug features ...", flush=True)
     drug_id_to_idx, fps, protein_sets, atc_list = build_drug_features()
     n_drugs = len(drug_id_to_idx)
     fp_list = fps  # same order as drug_id_to_idx enumeration
-    print(f"[A7] {n_drugs:,} drugs  | fps: {sum(1 for f in fps if f is not None):,}"
+    print(f"[mor] {n_drugs:,} drugs  | fps: {sum(1 for f in fps if f is not None):,}"
           f" | proteins: {sum(1 for s in protein_sets if s):,}"
           f" | atc: {sum(1 for a in atc_list if a):,}", flush=True)
 
@@ -124,7 +124,7 @@ def main():
         if a_idx >= 0 and b_idx >= 0 and fam:
             family_to_pairs[fam].append(i)
             ok += 1
-    print(f"[A7] usable pairs (both drugs + family known): {ok:,} / {len(pairs_tbl):,}")
+    print(f"[mor] usable pairs (both drugs + family known): {ok:,} / {len(pairs_tbl):,}")
 
     # Sample queries stratified by family
     random.seed(RANDOM_SEED)
@@ -132,7 +132,7 @@ def main():
     for fam, idx_list in family_to_pairs.items():
         k = min(PAIRS_PER_FAMILY, len(idx_list))
         query_indices.extend(random.sample(idx_list, k))
-    print(f"[A7] {len(query_indices):,} query pairs sampled "
+    print(f"[mor] {len(query_indices):,} query pairs sampled "
           f"(stratified, ≤{PAIRS_PER_FAMILY}/family over {len(family_to_pairs)} families)")
 
     # Per-drug protein-count vector (for Jaccard denominators)
@@ -256,10 +256,10 @@ def main():
                   f"{rate:.1f} q/s   eta {eta:.0f}s", flush=True)
 
     elapsed = time.time() - t0
-    print(f"[A7] done in {elapsed:.0f}s")
+    print(f"[mor] done in {elapsed:.0f}s")
 
     # Report
-    md = ["# A7 — Mechanistic Overlap Rate (MOR) report\n",
+    md = ["# Mechanistic Overlap Rate (MOR) report\n",
           f"- Queries: **{mor_total:,}** (stratified, ≤{PAIRS_PER_FAMILY}/family)",
           f"- Similarity weights: α·protein + β·smiles + γ·atc/7 "
           f"(α={ALPHA_PROTEIN}, β={BETA_SMILES}, γ={GAMMA_ATC})",
@@ -299,8 +299,8 @@ def main():
               f"(need ≥ {random_baseline + 15:.1f}%)")
 
     OUT_MD.write_text("\n".join(md) + "\n")
-    print(f"[A7] wrote {OUT_MD.relative_to(ROOT)}")
-    print(f"[A7] MOR@1={100*mor_hits[1]/max(mor_total,1):.2f}%  "
+    print(f"[mor] wrote {OUT_MD.relative_to(ROOT)}")
+    print(f"[mor] MOR@1={100*mor_hits[1]/max(mor_total,1):.2f}%  "
           f"MOR@10={overall_mor10:.2f}%")
 
 

@@ -1,11 +1,11 @@
-"""Phase C1 / C2 -- Student SFT with tier-weighted + faithfulness
+"""Student SFT -- Student SFT with tier-weighted + faithfulness
 + symmetry losses.
 
 Student base: Qwen2.5-7B (chat template) + LoRA rank 64.
 
 Why this script, not TRL's SFTTrainer
 -------------------------------------
-TRL's SFTTrainer is great for vanilla SFT on chat data, but V4 needs
+TRL's SFTTrainer is great for vanilla SFT on chat data, but the current pipeline needs
 three deviations from vanilla CE:
 
   1.  **Tier-weighted loss multiplier.**  Each SFT record carries a
@@ -467,7 +467,7 @@ def _collate(features: list[dict], tokenizer, max_length: int) -> dict:
 
 # ---------------------------------------------------------- custom Trainer
 class DdiSftTrainer(Trainer):  # type: ignore[name-defined]
-    """Trainer subclass implementing V4's tier + faithfulness + symmetry loss.
+    """Trainer subclass implementing the tier + faithfulness + symmetry loss.
 
     Loss composition (per batch):
         L = sum_i (sample_weight_i * faithfulness_weight_i) * CE_i

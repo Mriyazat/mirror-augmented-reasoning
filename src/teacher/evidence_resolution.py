@@ -1,4 +1,4 @@
-"""Evidence-ID resolution shared between the QC gate G2 and the Phase E
+"""Evidence-ID resolution shared between the QC gate G2 and the evaluation
 metrics (MFS, HR, RIS).
 
 Rationale
@@ -26,7 +26,7 @@ Public API
     strip_metric_literal(tok)     -> str
     resolves(eid, expanded_pool)  -> bool       (evidence lookup used by callers)
 
-The implementation is the V4 post-patch version (April 2026) that handles
+The implementation handles
 Qwen's `_substrate`/`_inducer` drift, DeepSeek's bare enzyme names, and
 multi-teacher metric-literal citations.
 """

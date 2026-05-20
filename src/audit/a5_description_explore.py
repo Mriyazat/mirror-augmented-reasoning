@@ -1,4 +1,4 @@
-"""A5.0 — Description corpus exploration BEFORE writing the taxonomy.
+"""description corpus exploration — Description corpus exploration BEFORE writing the taxonomy.
 
 We normalize each description (replace drug names with <A>/<B> placeholders),
 then count exact templates. This shows the real structural vocabulary we must cover.
@@ -45,11 +45,11 @@ def build_namewise_placeholder_replacer(pairs_rows) -> callable:
 
 
 def main():
-    print("[A5.0] reading pairs.parquet + drugs.parquet...")
+    print("[description corpus exploration] reading pairs.parquet + drugs.parquet...")
     pairs = pq.read_table(PAIRS, columns=[
         "a_id", "b_id", "a_name", "b_name", "description", "raw_subject_id"
     ]).to_pylist()
-    print(f"[A5.0] {len(pairs):,} pairs loaded")
+    print(f"[description corpus exploration] {len(pairs):,} pairs loaded")
 
     normalize = build_namewise_placeholder_replacer(pairs)
 
@@ -63,7 +63,7 @@ def main():
         tpl[norm] += 1
 
     total = sum(tpl.values())
-    print(f"[A5.0] {len(tpl):,} unique normalized templates (cover {total:,} pairs)")
+    print(f"[description corpus exploration] {len(tpl):,} unique normalized templates (cover {total:,} pairs)")
 
     cum = 0
     top_n_cover = None
@@ -82,7 +82,7 @@ def main():
 
     # Preview MD (top 60 templates + coverage summary)
     md = [
-        "# A5.0 — DrugBank description templates\n",
+        "# description corpus exploration — DrugBank description templates\n",
         f"- Total pair rows: **{total:,}**",
         f"- Unique normalized templates: **{len(tpl):,}**",
         f"- Templates needed to cover **95%** of rows: **{top_n_cover:,}**",
@@ -100,7 +100,7 @@ def main():
     md.append("")
     md.append(f"Full list in `{OUT_TSV.relative_to(ROOT)}`.")
     OUT_MD.write_text("\n".join(md) + "\n")
-    print(f"[A5.0] wrote {OUT_MD.relative_to(ROOT)} + {OUT_TSV.relative_to(ROOT)}")
+    print(f"[description corpus exploration] wrote {OUT_MD.relative_to(ROOT)} + {OUT_TSV.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":

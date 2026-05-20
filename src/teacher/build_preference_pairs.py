@@ -33,14 +33,14 @@ Preference-construction strategies
     "conclusion".  Subject/object mentions in prose are left intact
     (this is a surface-level direction-tag hack -- we're teaching the
     model that THE TAG matters).
-    Target: ~40 % of pairs.  Directly addresses V3's 51 % mirror-error.
+    Target: ~40 % of pairs.  Directly addresses the earlier baseline's 51 % mirror-error.
 
 2.  **evidence_drop** (grounding)
     Source: full_correct traces with >=2 evidence_ids across steps.
     Rejected variant: clear all evidence_ids (replace with []) but
     keep rationale prose.  Teaches the student to prefer grounded
     reasoning.  This is a mild preference -- rationale prose without
-    evidence_ids is WRONG under V4's schema, but fluent, so DPO alone
+    evidence_ids is WRONG under the schema, but fluent, so DPO alone
     won't nuke it.  Target: ~20 %.
 
 3.  **family_swap** (classifier-level)
@@ -97,7 +97,7 @@ from src.teacher.schema import (
 ROOT = Path(__file__).resolve().parents[2]
 
 _FAMILY_CONFUSION: dict[str, list[str]] = {
-    # Hand-built family-confusion map matching the actual V4 family
+    # Hand-built family-confusion map matching the actual family
     # vocabulary used in `data_processed/labels_hierarchical.parquet`.
     # Each family lists plausible cross-family confusions that a model
     # might emit; the `family_swap` strategy picks one as a hard
@@ -112,7 +112,7 @@ _FAMILY_CONFUSION: dict[str, list[str]] = {
 }
 
 _IN_FAMILY_SUBTYPES: dict[str, list[str]] = {
-    # Actual subtype vocabulary from V4 taxonomy (see
+    # Actual subtype vocabulary from the family taxonomy (see
     # configs/ddi_taxonomy.yaml / data_processed/taxonomy_schema.json).
     "PK_Metabolism":   ["metabolism", "serum_concentration",
                         "active_metabolite_serum_conc"],

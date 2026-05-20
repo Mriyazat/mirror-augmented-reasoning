@@ -1,19 +1,19 @@
-"""MPS -- Mirror-Pair Separation (novelty pillar P4).
-
-Definition (plan §8)
---------------------
+"""MPS -- Mirror-Pair Separation.
+Definition
+----------
     MPS = 1 - P(mirror_error | correct_family)
         = P(direction prediction is correctly symmetric across order swap |
             family was predicted correctly in BOTH orderings)
 
-Motivation -- the V3 failure this fixes
----------------------------------------
-V3 (Qwen2.5-7B distilled) had 51.4 % of its errors attributable to
-direction-mirror confusion: when the same pair was shown as (A, B) vs
-(B, A), the student would copy its direction tag rather than flip it.
-The model had learned pair-surface patterns, not the ordering-covariant
-mechanism.  MPS was built to measure exactly this failure mode so that
-ablations (e.g., -- Mirror DPO) can be attributed to it.
+Motivation
+----------
+Earlier distilled-student baselines were observed to attribute a large
+fraction of their errors to direction-mirror confusion: when the same
+pair was shown as (A, B) vs (B, A), the student would copy its direction
+tag rather than flip it. Such a model has learned pair-surface patterns
+rather than the ordering-covariant mechanism. MPS measures exactly this
+failure mode so that ablations (e.g., removing the Mirror DPO objective)
+can be attributed to it.
 
 Why condition on "correct family"?
 ----------------------------------

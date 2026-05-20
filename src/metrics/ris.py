@@ -1,7 +1,6 @@
-"""RIS -- Retrieval Influence Score (novelty pillar P10).
-
-Definition (plan §8)
---------------------
+"""RIS -- Retrieval Influence Score.
+Definition
+----------
     RIS = Delta_acc(true-ev)  -  Delta_acc(adv-ev)
         = [ acc(with TRUE evidence)    - acc(no evidence) ]
         - [ acc(with ADV  evidence)    - acc(no evidence) ]
@@ -21,8 +20,8 @@ RIS catches both at once:
   - Negative RIS        -> adversarial context FOOLS the model more than
                             true context helps it (red flag).
 
-Success criterion (plan §11)
-----------------------------
+Success criterion
+-----------------
     RIS > 0 AND positive on adversarial subset (retrieval resistant).
 
 Construction of adv evidence

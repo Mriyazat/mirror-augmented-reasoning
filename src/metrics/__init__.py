@@ -1,6 +1,6 @@
-"""DDI V4 metrics library.
+"""DDI Verifier — metrics library.
 
-Novel metrics for mechanism-faithful DDI evaluation (plan §8):
+Novel metrics for mechanism-faithful DDI evaluation :
 
     MFS   -- Mechanism-Faithfulness Score   (mfs.py)
     MPS   -- Mirror-Pair Separation          (mps.py)
@@ -12,7 +12,7 @@ Novel metrics for mechanism-faithful DDI evaluation (plan §8):
     CSA   -- Cross-Symmetry Agreement        (csa.py)
     HR    -- Hallucination Rate              (hr.py)
     RIS   -- Retrieval Influence Score       (ris.py)
-    MOR   -- Mechanistic Overlap Rate        (mor.py -- A7 retrieval gate)
+    MOR   -- Mechanistic Overlap Rate        (mor.py — retrieval audit)
 
 All scorers share the evidence-resolution convention from
 `src.teacher.evidence_resolution` so metric reports stay consistent with
@@ -30,7 +30,7 @@ except ImportError as _mor_err:  # pragma: no cover
     import warnings
     warnings.warn(
         f"src.metrics.mor not loaded ({_mor_err.__class__.__name__}: "
-        f"{_mor_err}). Install rdkit if you need the A7 MOR audit; "
+        f"{_mor_err}). Install rdkit if you need the MOR retrieval audit; "
         "run_full_eval does not need it.",
         stacklevel=2,
     )

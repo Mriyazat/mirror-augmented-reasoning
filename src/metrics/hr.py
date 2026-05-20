@@ -1,7 +1,7 @@
-r"""HR -- Hallucination Rate (novelty pillar P5, also drives G6 in QC).
+r"""HR -- Hallucination Rate.
 
-Definition (plan §8, §11)
--------------------------
+Definition
+----------
     HR = fraction of rationale ENTITY MENTIONS that are not found in the
          known DrugBank / KEGG / enzyme vocabulary.
 
@@ -15,7 +15,7 @@ in the rationale prose real?  Models sometimes invent:
   - made-up UniProt ids / pathway ids / transporter families
 
 HR catches these even when they aren't cited as evidence.  The plan
-§11 target is HR <= 0.10.
+The target value is HR <= 0.10.
 
 Scope
 -----
@@ -37,7 +37,7 @@ Design choices
 2.  **Normalization via `evidence_resolution`.**  We reuse
     `normalize_citation` / `expand_context_ids` so HR's resolution
     rules match MFS / G2.  That is load-bearing: if HR flagged entities
-    that MFS accepted (or vice versa), Phase E numbers would
+    that MFS accepted (or vice versa), evaluation numbers would
     contradict each other.
 
 3.  **Default extractor is conservative.**  It only extracts high-
@@ -264,7 +264,7 @@ def hr_corpus(records: Sequence[dict],
 
 
 # ----------------------------------------------------------------------
-# Helper: load a default known-entity vocabulary from the V4 parquets.
+# Helper: load a default known-entity vocabulary from the the canonical parquets.
 # ----------------------------------------------------------------------
 def load_known_entities(data_processed: Path | str | None = None) -> set[str]:
     """Load a default DrugBank / KEGG / enzyme vocabulary.
@@ -274,7 +274,7 @@ def load_known_entities(data_processed: Path | str | None = None) -> set[str]:
       - DrugBank-known UniProt IDs from `drug_proteins.parquet`
       - KEGG pathway IDs from `pathways_unified.parquet`
       - A hard-coded list of canonical CYP / transporter families
-        (since these are universal, not V4-specific)
+        (since these are universal, not pipeline-specific)
 
     Intended for offline metric reporting; not imported at metric
     compute time so callers can override.

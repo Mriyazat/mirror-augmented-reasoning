@@ -207,7 +207,7 @@ def _run_single(split: str, provider_name: str, model: str,
         tensor_parallel_size=tensor_parallel_size,
     )
 
-    # Temperature schedule for candidate diversification (v4.3).
+    # Temperature schedule for candidate diversification .
     rubric = load_rubric()
     temp_schedule: list[float] = list(
         rubric.get("teacher_generation", {}).get("candidate_temperatures") or []
@@ -287,7 +287,7 @@ def _run_single(split: str, provider_name: str, model: str,
                     f"### SYSTEM\n{msgs['system']}\n\n### USER\n{msgs['user']}\n"
                 )
 
-            # Temperature diversification (v4.3): N candidates with different
+            # Temperature diversification : N candidates with different
             # temperatures for reasoning diversity (Feng et al. 2024).  Fan
             # out the N calls concurrently so vLLM can batch them in a single
             # forward pass instead of serving them one at a time.  On a 4×H100

@@ -1,7 +1,6 @@
-"""AU -- Abstention Utility (novelty pillar P7).
-
-Definition (plan §8)
---------------------
+"""AU -- Abstention Utility.
+Definition
+----------
     AU = (N_correct_kept - alpha * N_incorrect_kept) / N_total
 
 where
@@ -21,8 +20,8 @@ and additionally report alpha in {2.0, 5.0} for severity-stratified
 robustness.  alpha > 1 means "a wrong prediction is worth alpha right
 predictions worth of disutility".
 
-Success criteria (plan §11)
----------------------------
+Success criteria
+----------------
     - AU > 0 at 90 % coverage (i.e. abstain on at most 10 % of pairs).
 
 Related metrics we also expose
@@ -49,7 +48,7 @@ Design choices
 
 3.  **Gold comparison**: the caller supplies `pred_correct: bool` per
     pair.  This decouples AU from the taxonomy-level metric used for
-    correctness (family-only, subtype, full hierarchy).  For plan-§11
+    correctness (family-only, subtype, full hierarchy).  For specification
     evaluation we compute AU using family-correct-ness.
 
 Input data model (single-threshold)
@@ -167,7 +166,7 @@ def au_curve(records: Sequence[AbstentionRecord],
                   "n_kept": int, "n_correct": int, "n_incorrect": int },
                 ...
             ],
-            "au_at_90_coverage":        float,   # main plan-§11 number
+            "au_at_90_coverage":        float,   # main specification number
             "au_at_coverage": { 0.5: ..., 0.8: ..., 0.9: ..., 0.95: ... },
             "aurc":                     float,   # area under risk-coverage curve
             "best_au":                  float,

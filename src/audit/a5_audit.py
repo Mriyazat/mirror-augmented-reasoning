@@ -1,4 +1,4 @@
-"""A5 audit — cross-check the taxonomy outputs before moving to A6.
+"""Taxonomy audit — cross-check the taxonomy outputs before the retrieval stage.
 
 Checks:
   1. coverage ≥ 99%  (already reported)
@@ -26,7 +26,7 @@ OUT_MD = ROOT / "outputs" / "audit" / "a5_integrity_report.md"
 
 
 def main():
-    print("[A5-audit] loading labels_hierarchical.parquet ...")
+    print("[taxonomy-audit] loading labels_hierarchical.parquet ...")
     rows = pq.read_table(LABELS).to_pylist()
     n = len(rows)
 
@@ -57,7 +57,7 @@ def main():
     spot = [rows[i] for i in sample_idx]
 
     # Polarity-vs-subtype sanity for AdverseRisk: polarity must be 'risk' (risk
-    # increased) or 'risk_down' (risk decreased — new A5 variant for protective
+    # increased) or 'risk_down' (risk decreased — new variant for protective
     # adverse-effect interactions).
     bad_risk_pol = [r for r in rows if r["family"] == "AdverseRisk"
                     and r["polarity"] not in ("risk", "risk_down")]
@@ -68,7 +68,7 @@ def main():
     # Report
     fam_counts = Counter(r["family"] for r in rows)
     md = [
-        "# A5 integrity audit\n",
+        "# Taxonomy integrity audit\n",
         "## Primary gates",
         f"- Coverage ≥ 99%: **{'PASS' if coverage >= 99 else 'FAIL'}** ({coverage:.2f}%)",
         f"- Families ≤ 20: **{'PASS' if len(fam_counts) <= 20 else 'FAIL'}** ({len(fam_counts)})",
@@ -111,11 +111,11 @@ def main():
     md.append(f"- Rare-subtype threshold used: {schema['rare_subtype_threshold']}")
 
     OUT_MD.write_text("\n".join(md) + "\n")
-    print(f"[A5-audit] wrote {OUT_MD.relative_to(ROOT)}")
+    print(f"[taxonomy-audit] wrote {OUT_MD.relative_to(ROOT)}")
     # Exit status
     fails = [miss_polarity, dir_subject_null, dir_object_null, dir_same_drug,
              bidi_with_subject, bad_ids, bad_risk_pol, bad_dir_pol]
-    print(f"[A5-audit] fail counts: {[len(x) for x in fails]}  "
+    print(f"[taxonomy-audit] fail counts: {[len(x) for x in fails]}  "
           f"coverage={coverage:.2f}%  families={len(fam_counts)}")
 
 

@@ -1,4 +1,4 @@
-"""Smoke test for src/teacher/build_preference_pairs.py.
+"""Unit tests for src/teacher/build_preference_pairs.py.
 
 Synthesizes a tiny teacher_clean.jsonl with one record per tier/direction
 combination, runs the builder, and verifies the expected preference

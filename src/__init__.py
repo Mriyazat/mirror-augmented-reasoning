@@ -1,7 +1,7 @@
-"""ddi_v4 — Drug-Drug Interaction prediction V4 (EMNLP 2026 target).
+"""Drug-Drug Interaction prediction with PRM-guided distillation and an LLM verifier.
 
 Top-level package. Import subpackages explicitly:
-    from ddi_v4 import data, audit, metrics, training, evaluation
+    from ddi_verifier import data, audit, metrics, training, evaluation
 """
 
 __version__ = "0.1.0"
