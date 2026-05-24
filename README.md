@@ -1,4 +1,4 @@
-# DDI Verifier: PRM-Guided Distillation and Verifier-Reranked Inference for Drug-Drug Interaction Prediction
+# MARD: Mirror-Augmented Reasoning Distillation for Mechanism-Level Drug–Drug Interaction Prediction
 
 Research code accompanying our EMNLP 2026 submission.
 
