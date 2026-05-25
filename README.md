@@ -1,73 +1,125 @@
-# MARD: Mirror-Augmented Reasoning Distillation for Mechanism-Level Drug–Drug Interaction Prediction
+<h1 align="center">MARD</h1>
 
-Research code accompanying our EMNLP 2026 submission.
+<p align="center">
+  <b>Mirror-Augmented Reasoning Distillation for<br>
+  Mechanism-Level Drug–Drug Interaction Prediction</b>
+</p>
+
+<p align="center">
+  <i>Research code accompanying our EMNLP 2026 submission.</i>
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img alt="Code license" src="https://img.shields.io/badge/code-MIT-blue.svg"></a>
+  <a href="https://creativecommons.org/licenses/by-nc/4.0/"><img alt="Adapters license" src="https://img.shields.io/badge/adapters%20%26%20corpora-CC%20BY--NC%204.0-lightgrey.svg"></a>
+  <img alt="Python" src="https://img.shields.io/badge/python-3.10%2B-3776AB.svg?logo=python&logoColor=white">
+  <img alt="PyTorch" src="https://img.shields.io/badge/PyTorch-2.x-EE4C2C.svg?logo=pytorch&logoColor=white">
+  <img alt="Venue" src="https://img.shields.io/badge/venue-EMNLP%202026-9d174d.svg">
+  <a href="https://go.drugbank.com/"><img alt="DrugBank" src="https://img.shields.io/badge/data-DrugBank-2c8e3f.svg"></a>
+</p>
+
+<p align="center">
+  <a href="#abstract">Abstract</a> ·
+  <a href="#pipeline-overview">Pipeline</a> ·
+  <a href="#end-to-end-case-study-for-pair-db00582--db06626-voriconazole--axitinib">Case study</a> ·
+  <a href="#repository-layout">Layout</a> ·
+  <a href="#installation">Install</a> ·
+  <a href="#evaluation">Evaluation</a> ·
+  <a href="#metrics">Metrics</a> ·
+  <a href="#license">License</a>
+</p>
+
+---
 
 ## Abstract
 
+<div align="justify">
+
 Mechanism-level drug–drug interaction (DDI) prediction requires
-identifying *which* enzyme or pharmacodynamic axis is implicated, in
-*which* direction, and with *which* evidence — not merely whether two
-drugs interact. We introduce a reproducible mechanism-level DDI
-labelling and evaluation protocol with a structured 7-family / 147-subtype
-taxonomy, leakage-safe cold-split protocols, and auditable reasoning
-metrics for evaluating pharmacological prediction beyond flat
-interaction classification. We propose a pipeline that produces a 7B
-reasoning **MARD** (**M**irror-**A**ugmented **R**easoning
-**D**istillation), combining three training innovations: a
-single-token KL on the direction tag that ties the model's prediction,
-per-loss PRM-weighted DPO with programmatic hard negatives, and a
-leakage-safe mechanism-aware retrieval channel. Process-reward step
-labels are automatically verifiable against DrugBank-structured
-fields, requiring no human annotation or LLM judge. On the
-April-2026 DrugBank release, our **MARD-7B** is the only system in a
-32-system comparison whose accuracy survives drug-pair novelty,
-beating the best baseline by **+13.9 pp** and GPT-4o by **+6.7 pp**
-at ~1% of frontier API cost. Further analysis reveals an
-*anti-memorisation* signature where accuracy improves on rarely seen
-drugs, suggesting that gain comes from structured pharmacological
-reasoning rather than drug-frequency memorisation.
+identifying <i>which</i> enzyme or pharmacodynamic axis is implicated,
+in <i>which</i> direction, and with <i>which</i> evidence — not merely
+whether two drugs interact. We introduce a reproducible mechanism-level
+DDI labelling and evaluation protocol with a structured
+7-family / 147-subtype taxonomy, leakage-safe cold-split protocols, and
+auditable reasoning metrics for evaluating pharmacological prediction
+beyond flat interaction classification. We propose a pipeline that
+produces a 7B reasoning <b>MARD</b>
+(<b>M</b>irror-<b>A</b>ugmented <b>R</b>easoning <b>D</b>istillation),
+combining three training innovations: a single-token KL on the
+direction tag that ties the model's prediction, per-loss PRM-weighted
+DPO with programmatic hard negatives, and a leakage-safe
+mechanism-aware retrieval channel. Process-reward step labels are
+automatically verifiable against DrugBank-structured fields, requiring
+no human annotation or LLM judge. On the April-2026 DrugBank release,
+our <b>MARD-7B</b> is the only system in a 32-system comparison whose
+accuracy survives drug-pair novelty, beating the best baseline by
+<b>+13.9 pp</b> and GPT-4o by <b>+6.7 pp</b> at ~1% of frontier API
+cost. Further analysis reveals an <i>anti-memorisation</i> signature
+where accuracy improves on rarely seen drugs, suggesting that gain
+comes from structured pharmacological reasoning rather than
+drug-frequency memorisation.
+
+</div>
 
 ## Pipeline overview
 
-The pipeline produces a small, calibrated DDI predictor that emits
-mechanism-grounded reasoning traces. At a high level it has four phases:
+<div align="justify">
 
-- **Phase A — Data construction.** A DrugBank-derived corpus, a curated
-  7-family / multi-subtype label taxonomy with directionality, pair-level
-  mechanistic signatures, and three reproducible train/val/test splits
-  (random, drug-cold, pair-cold) plus a stratified development subset.
+The pipeline produces a small, calibrated DDI predictor that emits
+mechanism-grounded reasoning traces. At a high level it has four
+phases:
+
+</div>
+
+- **Phase A — Data construction.** A DrugBank-derived corpus, a
+  curated 7-family / multi-subtype label taxonomy with directionality,
+  pair-level mechanistic signatures, and three reproducible
+  train/val/test splits (random, drug-cold, pair-cold) plus a
+  stratified development subset.
 - **Phase B — Teacher generation and PRM training.** A heterogeneous
   three-teacher ensemble (Llama-3.3-70B, Qwen2.5-72B,
   DeepSeek-R1-Distill-Llama-70B) produces step-structured reasoning
   traces. A Process Reward Model is then trained on auto-verifiable
-  step-level signals (evidence grounding, direction preservation, family
-  consistency, PK-flag consistency, and others) to filter and re-rank
-  candidate traces.
+  step-level signals (evidence grounding, direction preservation,
+  family consistency, PK-flag consistency, and others) to filter and
+  re-rank candidate traces.
 - **Phase C — Student training.** A 7B student is fine-tuned on the
-  PRM-filtered teacher traces with a faithfulness loss and a mirror-pair
-  symmetry-KL term, followed by preference optimization on hard-negative
-  and direction-mirror pairs.
+  PRM-filtered teacher traces with a faithfulness loss and a
+  mirror-pair symmetry-KL term, followed by preference optimization on
+  hard-negative and direction-mirror pairs.
 - **Phase D — Evaluation.** Standard classification metrics together
-  with the novel reasoning-faithfulness metrics introduced in this work,
-  conformal abstention, verifier re-ranking, and head-to-head
+  with the novel reasoning-faithfulness metrics introduced in this
+  work, conformal abstention, verifier re-ranking, and head-to-head
   comparisons against frontier LLMs and DDI-specific baselines.
 
-This repository is the source code, configuration, and example launchers
-that produced the results in the paper.
+<div align="justify">
+
+This repository is the source code, configuration, and example
+launchers that produced the results in the paper.
+
+</div>
 
 ## End-to-end case study for pair DB00582 | DB06626 (Voriconazole + Axitinib)
+
+<div align="justify">
 
 A concrete illustration of what MARD-7B does on a single DrugBank
 pair. Both panels are discussed in the paper (Fig.&nbsp;3 /
 Appendix&nbsp;A); they are reproduced here so the
-input → reasoning → verifiable-output flow is visible without
-opening the PDF.
+input → reasoning → verifiable-output flow is visible without opening
+the PDF.
+
+</div>
 
 ### Pipeline at a glance
+
+<div align="justify">
 
 The five-stage view from the structured input pool, through the
 mirror-tied SFT and PRM-weighted DPO objectives, to the
 schema-constrained reasoning trace and verified final answer:
+
+</div>
 
 <p align="center">
   <img src="docs/figures/case_study_overview.png"
@@ -77,14 +129,18 @@ schema-constrained reasoning trace and verified final answer:
 
 ### What the model actually reads and emits
 
-A drill-down on the same pair: the raw DrugBank fields, the
-PK-flag table and pair-level similarity scalars the model receives,
-the five retrieved labelled neighbours, the four-step reasoning
-trace, and the structured prediction
-(`PK_Metabolism / metabolism / a_to_b / down`, confidence 0.85).
-Every cited identifier appears verbatim in the evidence pool, so
-each step is independently checkable against DrugBank without any
-LLM judge in the loop:
+<div align="justify">
+
+A drill-down on the same pair: the raw DrugBank fields, the PK-flag
+table and pair-level similarity scalars the model receives, the five
+retrieved labelled neighbours, the four-step reasoning trace, and the
+structured prediction
+(<code>PK_Metabolism / metabolism / a_to_b / down</code>,
+confidence 0.85). Every cited identifier appears verbatim in the
+evidence pool, so each step is independently checkable against
+DrugBank without any LLM judge in the loop:
+
+</div>
 
 <p align="center">
   <img src="docs/figures/case_study_voriconazole_axitinib.png"
@@ -133,11 +189,16 @@ python -m spacy download en_core_web_sm
 export PYTHONPATH="$PWD:$PYTHONPATH"
 ```
 
+<div align="justify">
+
 For GPU clusters, portable example launchers live under
-`scripts/cluster_examples/`. They target a typical 4 x H100 80GB node
-and read `--account`, venv path, and module names from environment
-variables (see `scripts/cluster_examples/setup_env.sh` and
-`scripts/cluster_examples/activate_env.sh`).
+<code>scripts/cluster_examples/</code>. They target a typical
+4&nbsp;×&nbsp;H100 80&nbsp;GB node and read <code>--account</code>,
+venv path, and module names from environment variables (see
+<code>scripts/cluster_examples/setup_env.sh</code> and
+<code>scripts/cluster_examples/activate_env.sh</code>).
+
+</div>
 
 ## Environment Variables
 
@@ -152,23 +213,33 @@ variables (see `scripts/cluster_examples/setup_env.sh` and
 
 ## Data
 
-The pipeline operates on a fixed DrugBank XML release (the exact version
-is recorded in `configs/base.yaml -> data_sources.drugbank`) together
-with DDInter severity metadata (used only as metadata, never as a
-prediction target) and KEGG / SMPDB pathway maps.
+<div align="justify">
 
-Raw redistributable data is **not** included here. After obtaining
-DrugBank (license required) and the pathway dumps, the data-construction
-modules in `src/data/` reconstruct the canonical processed parquets and
-JSONL splits. The exact file paths, expected counts, and SHA-256 hashes
-are pinned in `configs/base.yaml`.
+The pipeline operates on a fixed [DrugBank][drugbank] XML release
+(the exact version is recorded in
+<code>configs/base.yaml&nbsp;-&gt;&nbsp;data_sources.drugbank</code>)
+together with DDInter severity metadata (used only as metadata, never
+as a prediction target) and KEGG / SMPDB pathway maps.
+
+Raw redistributable data is <b>not</b> included here. After obtaining
+DrugBank (license required) and the pathway dumps, the
+data-construction modules in <code>src/data/</code> reconstruct the
+canonical processed parquets and JSONL splits. The exact file paths,
+expected counts, and SHA-256 hashes are pinned in
+<code>configs/base.yaml</code>.
+
+</div>
 
 ## Evaluation
 
-Headline numbers are produced by `src.evaluation.run_full_eval`, which
-takes a predictions JSONL plus a ground-truth manifest and writes the
-full metrics table together with bootstrap confidence intervals to
-`outputs/results/<run_name>/`.
+<div align="justify">
+
+Headline numbers are produced by <code>src.evaluation.run_full_eval</code>,
+which takes a predictions JSONL plus a ground-truth manifest and
+writes the full metrics table together with bootstrap confidence
+intervals to <code>outputs/results/&lt;run_name&gt;/</code>.
+
+</div>
 
 ```bash
 python -m src.evaluation.run_full_eval \
@@ -178,18 +249,27 @@ python -m src.evaluation.run_full_eval \
     --run_name    student_rerank
 ```
 
-Frontier-LLM comparison runs (GPT-4o, Claude Opus 4, Gemini 2.5 Pro) are
-launched through `scripts/examples/run_frontier_chain.sh`, which records
-the exact API model id and request parameters next to the predictions.
+<div align="justify">
+
+Frontier-LLM comparison runs (GPT-4o, Claude Opus 4, Gemini 2.5 Pro)
+are launched through
+<code>scripts/examples/run_frontier_chain.sh</code>, which records the
+exact API model id and request parameters next to the predictions.
+
+</div>
 
 ## Metrics
 
+<div align="justify">
+
 Beyond macro-F1 and accuracy, we report the following metrics
-(implemented in `src/metrics/` and re-exported by
-`src/metrics/__init__.py`):
+(implemented in <code>src/metrics/</code> and re-exported by
+<code>src/metrics/__init__.py</code>):
+
+</div>
 
 | Metric | Meaning                                                      |
-| ------ | ------------------------------------------------------------ |
+| :----: | ------------------------------------------------------------ |
 | MFS    | Mechanism-Faithfulness Score (rationale vs. mechanism)       |
 | MPS    | Mirror-Pair Separation (direction-symmetry awareness)        |
 | CFS    | Counterfactual-Faithfulness Score                            |
@@ -201,9 +281,13 @@ Beyond macro-F1 and accuracy, we report the following metrics
 | SLFS   | Selective-Label Faithfulness Score                           |
 | MOR    | Mechanism-Overlap Ratio (retrieval audit, optional)          |
 
+<div align="justify">
+
 Bootstrap confidence intervals and paired significance tests are in
-`src/evaluation/bootstrap_ci.py` and
-`src/evaluation/paired_bootstrap_significance.py`.
+<code>src/evaluation/bootstrap_ci.py</code> and
+<code>src/evaluation/paired_bootstrap_significance.py</code>.
+
+</div>
 
 ## Tests
 
@@ -211,40 +295,39 @@ Bootstrap confidence intervals and paired significance tests are in
 pytest -q
 ```
 
+<div align="justify">
+
 Unit tests cover the metrics library, conformal abstention, preference
 pair construction, and the evaluation harness adapters.
 
+</div>
+
 ## License
 
-The **code** in this repository is released under the
+<div align="justify">
+
+The <b>code</b> in this repository is released under the
 [MIT License](LICENSE).
 
-The **released LoRA adapters** (MARD-7B SFT and PRM-DPO checkpoints,
-PRM scorer) and **curated derivative corpora** (mirror-augmented SFT
-splits, preference pairs, evaluation manifests) will be released
+The <b>released LoRA adapters</b> (MARD-7B SFT and PRM-DPO checkpoints,
+PRM scorer) and <b>curated derivative corpora</b> (mirror-augmented
+SFT splits, preference pairs, evaluation manifests) will be released
 under [CC BY-NC 4.0][cc-by-nc] for non-commercial research use, in
 compliance with [DrugBank][drugbank]'s academic-licence terms.
 
-The underlying **raw datasets** ([DrugBank][drugbank] XML, DDInter
-severity table, KEGG / SMPDB pathway dumps) are **not** redistributed
-here: each carries its own upstream licence and must be obtained
-directly from the source. The pipeline reconstructs the canonical
-processed files locally from a licensed [DrugBank][drugbank] release
-plus the pathway dumps; the expected file paths and SHA-256 hashes
-are pinned in `configs/base.yaml`.
+The underlying <b>raw datasets</b> ([DrugBank][drugbank] XML, DDInter
+severity table, KEGG / SMPDB pathway dumps) are <b>not</b>
+redistributed here: each carries its own upstream licence and must be
+obtained directly from the source. The pipeline reconstructs the
+canonical processed files locally from a licensed [DrugBank][drugbank]
+release plus the pathway dumps; the expected file paths and SHA-256
+hashes are pinned in <code>configs/base.yaml</code>.
 
-This is **research code released for academic / non-commercial use
-only**. The released MARD-7B adapters are not a medical device, not
-a clinical decision-support system, and must not be used as the sole
-basis for any prescribing or de-prescribing decision; every
-deployment must keep a qualified pharmacist or physician in the loop
-and treat each model output as a hypothesis subject to independent
-verification against primary clinical references.
-
-[cc-by-nc]: https://creativecommons.org/licenses/by-nc/4.0/
-[drugbank]: https://go.drugbank.com/
+</div>
 
 ## Acknowledgments
+
+<div align="justify">
 
 We thank the maintainers of the open-source projects this work builds
 upon, including [Med-PRM][med-prm], HuggingFace
@@ -252,6 +335,10 @@ upon, including [Med-PRM][med-prm], HuggingFace
 [PEFT][hf-peft] / [TRL][hf-trl], [vLLM][vllm], and the OpenDDI
 baselines repository.
 
+</div>
+
+[cc-by-nc]: https://creativecommons.org/licenses/by-nc/4.0/
+[drugbank]: https://go.drugbank.com/
 [med-prm]: https://github.com/dmis-lab/Med-PRM
 [hf-transformers]: https://github.com/huggingface/transformers
 [hf-accelerate]: https://github.com/huggingface/accelerate
