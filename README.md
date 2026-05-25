@@ -64,6 +64,7 @@ phases:
   pair-level mechanistic signatures, and three reproducible
   train/val/test splits (random, drug-cold, pair-cold) plus a
   stratified development subset.
+  
 - **Phase B — Teacher generation and PRM training.** A heterogeneous
   three-teacher ensemble (Llama-3.3-70B, Qwen2.5-72B,
   DeepSeek-R1-Distill-Llama-70B) produces step-structured reasoning
@@ -71,10 +72,12 @@ phases:
   step-level signals (evidence grounding, direction preservation,
   family consistency, PK-flag consistency, and others) to filter and
   re-rank candidate traces.
+  
 - **Phase C — Student training.** A 7B student is fine-tuned on the
   PRM-filtered teacher traces with a faithfulness loss and a
   mirror-pair symmetry-KL term, followed by preference optimization on
   hard-negative and direction-mirror pairs.
+  
 - **Phase D — Evaluation.** Standard classification metrics together
   with the novel reasoning-faithfulness metrics introduced in this
   work, conformal abstention, verifier re-ranking, and head-to-head
