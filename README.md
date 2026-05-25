@@ -2,6 +2,33 @@
 
 Research code accompanying our EMNLP 2026 submission.
 
+## Abstract
+
+Mechanism-level drug–drug interaction (DDI) prediction requires
+identifying *which* enzyme or pharmacodynamic axis is implicated, in
+*which* direction, and with *which* evidence — not merely whether two
+drugs interact. We introduce a reproducible mechanism-level DDI
+labelling and evaluation protocol with a structured 7-family / 147-subtype
+taxonomy, leakage-safe cold-split protocols, and auditable reasoning
+metrics for evaluating pharmacological prediction beyond flat
+interaction classification. We propose a pipeline that produces a 7B
+reasoning **MARD** (**M**irror-**A**ugmented **R**easoning
+**D**istillation), combining three training innovations: a
+single-token KL on the direction tag that ties the model's prediction,
+per-loss PRM-weighted DPO with programmatic hard negatives, and a
+leakage-safe mechanism-aware retrieval channel. Process-reward step
+labels are automatically verifiable against DrugBank-structured
+fields, requiring no human annotation or LLM judge. On the
+April-2026 DrugBank release, our **MARD-7B** is the only system in a
+32-system comparison whose accuracy survives drug-pair novelty,
+beating the best baseline by **+13.9 pp** and GPT-4o by **+6.7 pp**
+at ~1% of frontier API cost. Further analysis reveals an
+*anti-memorisation* signature where accuracy improves on rarely seen
+drugs, suggesting that gain comes from structured pharmacological
+reasoning rather than drug-frequency memorisation.
+
+## Pipeline overview
+
 The pipeline produces a small, calibrated DDI predictor that emits
 mechanism-grounded reasoning traces. At a high level it has four phases:
 
@@ -28,12 +55,52 @@ mechanism-grounded reasoning traces. At a high level it has four phases:
 This repository is the source code, configuration, and example launchers
 that produced the results in the paper.
 
+## End-to-end case study for pair DB00582 | DB06626 (Voriconazole + Axitinib)
+
+A concrete illustration of what MARD-7B does on a single DrugBank
+pair. Both panels are discussed in the paper (Fig.&nbsp;3 /
+Appendix&nbsp;A); they are reproduced here so the
+input → reasoning → verifiable-output flow is visible without
+opening the PDF.
+
+### Pipeline at a glance
+
+The five-stage view from the structured input pool, through the
+mirror-tied SFT and PRM-weighted DPO objectives, to the
+schema-constrained reasoning trace and verified final answer:
+
+<p align="center">
+  <img src="docs/figures/case_study_overview.png"
+       alt="Five-stage MARD pipeline on the Voriconazole + Axitinib pair: structured drug-pair input, evidence pool with PK flags and retrieved neighbours, mirror-tied SFT with KL on the direction tag, schema-constrained reasoning trace, and verified output checked against DrugBank."
+       width="100%">
+</p>
+
+### What the model actually reads and emits
+
+A drill-down on the same pair: the raw DrugBank fields, the
+PK-flag table and pair-level similarity scalars the model receives,
+the five retrieved labelled neighbours, the four-step reasoning
+trace, and the structured prediction
+(`PK_Metabolism / metabolism / a_to_b / down`, confidence 0.85).
+Every cited identifier appears verbatim in the evidence pool, so
+each step is independently checkable against DrugBank without any
+LLM judge in the loop:
+
+<p align="center">
+  <img src="docs/figures/case_study_voriconazole_axitinib.png"
+       alt="Detailed case study panel for DB00582|DB06626 showing raw DrugBank ATC / enzymes / proteins / pathway fields for Voriconazole and Axitinib, the PK-flag table the model sees, four pair-level similarity scalars, K=5 retrieved labelled neighbours, the four-step reasoning trace (pk_flag, protein, neighbor, conclusion), and the structured prediction with calibrated confidence."
+       width="100%">
+</p>
+
 ## Repository Layout
 
 ```
 EMNLP2026_DDI_Verifier_Release/
 ├── configs/                  # YAML configs (base + PRM rubric + FSDP)
-├── docs/                     # Pipeline overview, reproducibility notes
+├── docs/
+│   ├── figures/              # Case-study figures used in README
+│   ├── PIPELINE_OVERVIEW.md  # End-to-end pipeline reference
+│   └── REPRODUCIBILITY.md    # Hashes, configs, seed protocol
 ├── notebooks/                # Optional analysis notebooks
 ├── scripts/
 │   ├── cluster_examples/     # Example portable SLURM launchers
@@ -149,26 +216,45 @@ pair construction, and the evaluation harness adapters.
 
 ## License
 
-Released under the MIT License (see `LICENSE`). DrugBank and DDInter
-each have their own licenses; redistribution of those datasets from this
-repository is not permitted.
+The **code** in this repository is released under the
+[MIT License](LICENSE).
 
-## Citation
+The **released LoRA adapters** (MARD-7B SFT and PRM-DPO checkpoints,
+PRM scorer) and **curated derivative corpora** (mirror-augmented SFT
+splits, preference pairs, evaluation manifests) will be released
+under [CC BY-NC 4.0][cc-by-nc] for non-commercial research use, in
+compliance with [DrugBank][drugbank]'s academic-licence terms.
 
-```bibtex
-@inproceedings{ddi_verifier_emnlp2026,
-  title     = {PRM-Guided Distillation and Verifier-Reranked Inference
-               for Drug--Drug Interaction Prediction},
-  author    = {Anonymous},
-  booktitle = {Proceedings of EMNLP 2026},
-  year      = {2026}
-}
-```
+The underlying **raw datasets** ([DrugBank][drugbank] XML, DDInter
+severity table, KEGG / SMPDB pathway dumps) are **not** redistributed
+here: each carries its own upstream licence and must be obtained
+directly from the source. The pipeline reconstructs the canonical
+processed files locally from a licensed [DrugBank][drugbank] release
+plus the pathway dumps; the expected file paths and SHA-256 hashes
+are pinned in `configs/base.yaml`.
+
+This is **research code released for academic / non-commercial use
+only**. The released MARD-7B adapters are not a medical device, not
+a clinical decision-support system, and must not be used as the sole
+basis for any prescribing or de-prescribing decision; every
+deployment must keep a qualified pharmacist or physician in the loop
+and treat each model output as a hypothesis subject to independent
+verification against primary clinical references.
+
+[cc-by-nc]: https://creativecommons.org/licenses/by-nc/4.0/
+[drugbank]: https://go.drugbank.com/
 
 ## Acknowledgments
 
 We thank the maintainers of the open-source projects this work builds
-upon, including [Med-PRM](https://github.com/dmis-lab/Med-PRM),
-HuggingFace Transformers / Accelerate / PEFT / TRL,
-[vLLM](https://github.com/vllm-project/vllm),
-and the OpenDDI baselines repository.
+upon, including [Med-PRM][med-prm], HuggingFace
+[Transformers][hf-transformers] / [Accelerate][hf-accelerate] /
+[PEFT][hf-peft] / [TRL][hf-trl], [vLLM][vllm], and the OpenDDI
+baselines repository.
+
+[med-prm]: https://github.com/dmis-lab/Med-PRM
+[hf-transformers]: https://github.com/huggingface/transformers
+[hf-accelerate]: https://github.com/huggingface/accelerate
+[hf-peft]: https://github.com/huggingface/peft
+[hf-trl]: https://github.com/huggingface/trl
+[vllm]: https://github.com/vllm-project/vllm
