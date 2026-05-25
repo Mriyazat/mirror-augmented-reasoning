@@ -35,29 +35,17 @@
 
 <div align="justify">
 
-Mechanism-level drug–drug interaction (DDI) prediction requires
-identifying <i>which</i> enzyme or pharmacodynamic axis is implicated,
-in <i>which</i> direction, and with <i>which</i> evidence — not merely
-whether two drugs interact. We introduce a reproducible mechanism-level
-DDI labelling and evaluation protocol with a structured
-7-family / 147-subtype taxonomy, leakage-safe cold-split protocols, and
-auditable reasoning metrics for evaluating pharmacological prediction
-beyond flat interaction classification. We propose a pipeline that
-produces a 7B reasoning <b>MARD</b>
-(<b>M</b>irror-<b>A</b>ugmented <b>R</b>easoning <b>D</b>istillation),
-combining three training innovations: a single-token KL on the
-direction tag that ties the model's prediction, per-loss PRM-weighted
-DPO with programmatic hard negatives, and a leakage-safe
-mechanism-aware retrieval channel. Process-reward step labels are
-automatically verifiable against DrugBank-structured fields, requiring
-no human annotation or LLM judge. On the April-2026 DrugBank release,
-our <b>MARD-7B</b> is the only system in a 32-system comparison whose
-accuracy survives drug-pair novelty, beating the best baseline by
-<b>+13.9 pp</b> and GPT-4o by <b>+6.7 pp</b> at ~1% of frontier API
-cost. Further analysis reveals an <i>anti-memorisation</i> signature
-where accuracy improves on rarely seen drugs, suggesting that gain
-comes from structured pharmacological reasoning rather than
-drug-frequency memorisation.
+Mechanism-level drug–drug interaction (DDI) prediction requires identifying <i>which</i> enzyme or pharmacodynamic axis is implicated,
+in <i>which</i> direction, and with <i>which</i> evidence — not merely whether two drugs interact. We introduce a reproducible mechanism-level
+DDI labelling and evaluation protocol with a structured 7-family / 147-subtype taxonomy, leakage-safe cold-split protocols, and
+auditable reasoning metrics for evaluating pharmacological prediction beyond flat interaction classification. We propose a pipeline that
+produces a 7B reasoning <b>MARD</b> (<b>M</b>irror-<b>A</b>ugmented <b>R</b>easoning <b>D</b>istillation),
+combining three training innovations: a single-token KL on the direction tag that ties the model's prediction, per-loss PRM-weighted
+DPO with programmatic hard negatives, and a leakage-safe mechanism-aware retrieval channel. Process-reward step labels are
+automatically verifiable against DrugBank-structured fields, requiring no human annotation or LLM judge. On the April-2026 DrugBank release,
+our <b>MARD-7B</b> is the only system in a 32-system comparison whose accuracy survives drug-pair novelty, beating the best baseline by
+<b>+13.9 pp</b> and GPT-4o by <b>+6.7 pp</b> at ~1% of frontier API cost. Further analysis reveals an <i>anti-memorisation</i> signature
+where accuracy improves on rarely seen drugs, suggesting that gain comes from structured pharmacological reasoning rather than drug-frequency memorisation.
 
 </div>
 
